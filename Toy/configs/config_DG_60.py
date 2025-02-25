@@ -14,7 +14,7 @@ opt.tgt_domain_idx = list(
     set(range(0, opt.num_domain)) - set(opt.src_domain_idx))
 
 opt.dataset = "data/toy_d60_pi_random.pkl"
-opt.d_loss_type = "GRDA_loss"  # "DANN_loss" # "CIDA_loss" # "DANN_loss_mean"
+opt.d_loss_type = "GRDA_loss"  # "DANN_loss" # "CIDA_loss" # "DANN_loss_mean" "GRDA_loss"
 
 opt.use_pretrain_R = True
 opt.pretrain_R_path = "data/netR_4_dann_60_pi.pth"  # "data/netR_4_dann.pth"
@@ -67,3 +67,13 @@ opt.beta_dim = 2  # the dimension of global domain index beta
 
 # for grda discriminator
 opt.sample_v = 30
+
+# online settings, # of domain in each batch
+opt.k = 12
+opt.online = True
+# opt.online = False
+
+if opt.online:
+    opt.k = 12
+else:
+    opt.k = opt.num_domain

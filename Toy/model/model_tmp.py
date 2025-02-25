@@ -11,7 +11,6 @@ from model.lr_scheduler import TransformerLRScheduler
 import ot
 from sklearn.manifold import MDS
 import json
-import random
 # const
 LARGE_NUM = 1e9
 
@@ -80,7 +79,7 @@ class BaseModel(nn.Module):
         # beta:
         self.use_beta_seq = None
 
-    def learn(self, epoch, dataloader, verbose=False):
+    def learn(self, epoch, dataloader):
         self.train()
 
         self.epoch = epoch
@@ -100,9 +99,8 @@ class BaseModel(nn.Module):
 
             self.new_u.append(self.u_seq)
 
-        # self.new_u = self.my_cat(self.new_u)
-        # self.use_beta_seq = self.generate_beta(self.new_u)
-        self.use_beta_seq = None
+        self.new_u = self.my_cat(self.new_u)
+        self.use_beta_seq = self.generate_beta(self.new_u)
 
         for key, _ in new_loss_values.items():
             loss_values[key] /= count
@@ -124,18 +122,18 @@ class BaseModel(nn.Module):
         else:
             self.nan_flag = False
 
-    def test(self, epoch, dataloader, verbose=False):
+    def test(self, epoch, dataloader):
         self.eval()
         self.epoch = epoch
 
-        acc_curve = []
+        acc_curve = [[] for _ in range(self.num_domain)]
         l_x = []
         # l_r_x = []
         l_domain = []
         l_label = []
         l_encode = []
         l_y = []
-        l_u = np.zeros((self.num_domain, self.opt.u_dim))
+        l_u = np.zeros((self.opt.k, self.opt.u_dim))
         l_u_all = []
 
         for data in dataloader:
@@ -144,8 +142,11 @@ class BaseModel(nn.Module):
             # forward
             with torch.no_grad():
                 self.__test_forward__()
-            
-            acc_curve.append(self.g_seq.eq(self.y_seq).to(torch.float).sum(-1,keepdim=True).detach())
+
+            # acc per domain for all domain (offline), or sub domain (online)
+            acc_count = self.g_seq.eq(self.y_seq).to(torch.float).sum(-1, keepdim=True)
+            for idx in range(self.opt.k):
+                acc_curve[self.domain_sel[idx]].append(acc_count[idx])
 
             if self.opt.normalize_domain:
                 x_np = to_np(self.x_seq)
@@ -156,21 +157,22 @@ class BaseModel(nn.Module):
                 l_x.append(to_np(self.x_seq))
 
             l_y.append(to_np(self.y_seq))
+            # print(self.x_seq.shape, self.y_seq.shape, self.domain_seq.shape, self.q_z_seq.shape, 
+            #       self.g_seq.shape, self.u_seq.shape, self.u_seq.sum(1))
             # l_r_x.append(to_np(self.r_x_seq)) # test use only
             l_domain.append(to_np(self.domain_seq))
             l_encode.append(to_np(self.q_z_seq))
             l_label.append(to_np(self.g_seq))
             l_u += to_np(self.u_seq.sum(1))
             l_u_all.append(to_np(self.u_seq))
-
-        x_all = np.concatenate(l_x, axis=1)
-        y_all = np.concatenate(l_y, axis=1)
+        x_all = np.concatenate(l_x, axis=1).reshape(self.num_domain, -1)
+        y_all = np.concatenate(l_y, axis=1).reshape(self.num_domain, -1)
         # r_x_all = np.concatenate(l_r_x, axis=1) # test use only
-        e_all = np.concatenate(l_encode, axis=1)
-        domain_all = np.concatenate(l_domain, axis=1)
-        label_all = np.concatenate(l_label, axis=1)
+        e_all = np.concatenate(l_encode, axis=1).reshape(self.num_domain, -1)
+        domain_all = np.concatenate(l_domain, axis=1).reshape(self.num_domain, -1)
+        label_all = np.concatenate(l_label, axis=1).reshape(self.num_domain, -1)
         u = l_u / x_all.shape[1]
-        u_all = np.concatenate(l_u_all, axis=1)
+        u_all = np.concatenate(l_u_all, axis=1).reshape(self.num_domain, -1)
         beta_all = to_np(self.beta_seq)
 
         d_all = dict()
@@ -185,12 +187,11 @@ class BaseModel(nn.Module):
         d_all['u_all'] = flat(u_all)
         d_all['beta'] = beta_all
 
-        acc = to_np(torch.cat(acc_curve, 1).sum(-1))
-        # if verbose:
-        #     print(acc.shape, y_all.shape, acc)
-        #     exit(0)
-        acc = acc / y_all.shape[
-            1]  # this is the total number of the domain. Assume that we could get them
+        # print([ sum(elem) for elem in acc_curve])
+        # acc = to_np(torch.cat(acc_curve, 1).sum(-1))
+        acc = torch.tensor([sum(elem) for elem in acc_curve])
+        acc = acc / y_all.shape[1]  # this is the total number of the domain. Assume that we could get them
+
         test_acc = acc[self.opt.tgt_domain_idx].sum() / (
             self.opt.num_target) * 100
         acc_msg = '[Test][{}] Accuracy: total average {:.1f}, test average {:.1f}, in each domain {}'.format(
@@ -251,7 +252,12 @@ class BaseModel(nn.Module):
         #   domain_seq: Number of domain x Batch size x domain dim (1)
         #   idx_seq: Number of domain x Batch size x 1 (the order in the whole dataset)
         #   y_value_seq: Number of domain x Batch size x Predict Data dim
-        x_seq, y_seq, domain_seq = [d[0][None, :, :] for d in data
+        if self.opt.online:
+            x_seq, y_seq, domain_seq = [d[0][:, :] for d in data
+                                    ], [d[1][:] for d in data
+                                        ], [d[2][:] for d in data]
+        else:
+            x_seq, y_seq, domain_seq = [d[0][None, :, :] for d in data
                                         ], [d[1][None, :] for d in data
                                             ], [d[2][None, :] for d in data]
 
@@ -261,11 +267,8 @@ class BaseModel(nn.Module):
         self.domain_sel = torch.unique(self.domain_seq_tmp).to(self.device)
 
         self.x_seq = torch.zeros((self.num_domain, *self.x_seq_tmp.shape[1:])).to(self.device)
-        self.y_seq = torch.zeros((self.num_domain, *self.y_seq_tmp.shape[1:])).to(device=self.device, dtype=torch.long)
-        self.domain_seq = torch.zeros((self.num_domain, *self.domain_seq_tmp.shape[1:])).to(device=self.device, dtype=torch.long)
-        self.domain_sel_broadcast = torch.zeros((self.num_domain, 1)).to(self.device)
-        self.domain_sel_broadcast[self.domain_sel] = 1.0
-        self.domain_sel_broadcast.requires_grad = False
+        self.y_seq = torch.zeros((self.num_domain, *self.y_seq_tmp.shape[1:])).to(self.device)
+        self.domain_seq = torch.zeros((self.num_domain, *self.domain_seq_tmp.shape[1:])).to(self.device)
 
         for idx, elem in enumerate(self.domain_sel):
             # print(idx, elem)
@@ -276,7 +279,7 @@ class BaseModel(nn.Module):
 
         self.tmp_batch_size = self.x_seq.shape[1]
         # print(self.domain_sel)  # current selected domain
-        # print(self.x_seq.shape, self.y_seq.shape, self.domain_seq.shape, self.tmp_batch_size, self.domain_sel, self.domain_sel_broadcast)
+        print(self.x_seq.shape, self.y_seq.shape, self.domain_seq.shape, self.tmp_batch_size, self.domain_sel)
 
     def __train_forward__(self):
         self.u_seq, self.u_mu_seq, self.u_log_var_seq = self.netU(self.x_seq)
@@ -300,7 +303,7 @@ class BaseModel(nn.Module):
         self.beta_U_seq = self.netBeta2U(self.beta_seq)
 
         self.q_z_seq, self.q_z_mu_seq, self.q_z_log_var_seq, self.p_z_seq, self.p_z_mu_seq, self.p_z_log_var_seq, = self.netZ(
-            self.x_seq, self.u_seq, self.beta_seq)
+            self.x_seq, self.u_seq, self.beta_seq, self.domain_sel)
 
         self.r_x_seq = self.netR(self.u_seq)
         self.f_seq = self.netF(self.q_z_seq)
@@ -320,10 +323,10 @@ class BaseModel(nn.Module):
                                             self.tmp_beta_seq)
 
         self.q_z_seq, self.q_z_mu_seq, self.q_z_log_var_seq, self.p_z_seq, self.p_z_mu_seq, self.p_z_log_var_seq, = self.netZ(
-            self.x_seq, self.u_seq, self.beta_seq)
+            self.x_seq, self.u_seq, self.beta_seq, self.domain_sel)
         self.f_seq = self.netF(self.q_z_seq)
         self.g_seq = torch.argmax(self.f_seq.detach(), dim=2)
-        # print(self.f_seq.shape, self.g_seq.shape)
+
         # test use only
         # self.r_x_seq = self.netR(self.u_seq)
 
@@ -338,9 +341,7 @@ class BaseModel(nn.Module):
     def contrastive_loss(self, u_con_seq, temperature=1):
         # print(f"this is contrastive loss input u_con_seq {u_con_seq.shape}")
         # exit(0)
-        u_con_seq = u_con_seq.reshape(self.num_domain, -1) * self.domain_sel_broadcast
-
-        u_con_seq = u_con_seq.reshape(self.tmp_batch_size * self.num_domain,
+        u_con_seq = u_con_seq.reshape(self.tmp_batch_size * self.opt.k,
                                       -1)
         u_con_seq = nn.functional.normalize(u_con_seq, p=2, dim=1)
 
@@ -379,14 +380,14 @@ class BaseModel(nn.Module):
         # [0, 0, 0, 0, 1, 1, 1, 0 ...]
         # [0, 0, 0, 0, 0, 1, 1, 1 ...]
         # 这里也有问题，需要改
-        masks = torch.block_diag(*([base_m] * self.num_domain))
+        masks = torch.block_diag(*([base_m] * self.opt.k))
         logits = logits - masks * LARGE_NUM
 
         # label: which similarity should maximize. We only maximize the similarity of datapoints that:
         # belongs to one domain
         # next to each other
         # 这里需要换成选择的label
-        label = torch.arange(self.tmp_batch_size * self.num_domain).to(
+        label = torch.arange(self.tmp_batch_size * self.opt.k).to(
             self.device)
         label = torch.remainder(label + 1, self.tmp_batch_size) + label.div(
             self.tmp_batch_size, rounding_mode='floor') * self.tmp_batch_size
@@ -401,15 +402,12 @@ class BaseModel(nn.Module):
 
         # - E_q[log q(u|x)]
         # u is multi-dimensional
-        # loss_q_u_x = torch.mean((0.5 * flat(self.u_log_var_seq)).sum(1), dim=0)
-        loss_q_u_x = self.u_log_var_seq.reshape(self.num_domain, -1) * self.domain_sel_broadcast
-        loss_q_u_x = torch.mean((0.5 * flat(loss_q_u_x.reshape(*self.u_log_var_seq.shape))).sum(1), dim=0)
+        loss_q_u_x = torch.mean((0.5 * flat(self.u_log_var_seq)).sum(1), dim=0)
 
         # - E_q[log q(z|x,u)]
         # remove all the losses about log var and use 1 as var
-        # loss_q_z_x_u = torch.mean((0.5 * flat(self.q_z_log_var_seq)).sum(1),dim=0)
-        loss_q_z_x_u = self.q_z_log_var_seq.reshape(self.num_domain, -1) * self.domain_sel_broadcast
-        loss_q_z_x_u = torch.mean((0.5 * flat(loss_q_z_x_u.reshape(*self.q_z_log_var_seq.shape))).sum(1), dim=0)
+        loss_q_z_x_u = torch.mean((0.5 * flat(self.q_z_log_var_seq)).sum(1),
+                                  dim=0)
 
         # E_q[log p(z|x,u)]
         # first one is for normal
@@ -417,33 +415,24 @@ class BaseModel(nn.Module):
             torch.exp(flat(self.q_z_log_var_seq)) +
             (flat(self.q_z_mu_seq) - flat(self.p_z_mu_seq))**2) / flat(
                 torch.exp(self.p_z_log_var_seq))
-        
-        loss_p_z_x_u = loss_p_z_x_u.reshape(self.num_domain, -1) * self.domain_sel_broadcast
-        loss_p_z_x_u = torch.mean(loss_p_z_x_u.reshape(self.num_domain * self.tmp_batch_size, -1).sum(1), dim=0)
+        loss_p_z_x_u = torch.mean(loss_p_z_x_u.sum(1), dim=0)
 
-        # print(f"the shape for y_seq:{self.y_seq.shape}, domain mask {self.domain_mask.shape}")
-        # print((self.domain_mask == 1).to(self.y_seq.device))
-        # print(torch.isin(torch.arange(self.domain_mask.shape[0]).to(self.y_seq.device), self.domain_sel))
-        mask1 = (self.domain_mask == 1)
-        mask2 = (self.domain_sel_broadcast.squeeze(1) == 1)
-        # print(f"{self.y_seq[mask1 & mask2].shape}")
-        # exit(0)
-
+        print(f"the shape for y_seq:{self.y_seq.shape}, domain mask {self.domain_mask.shape}")
+        print((self.domain_mask == 1).to(self.y_seq.device))
+        print(torch.isin(torch.arange(self.domain_mask.shape[0]).to(self.y_seq.device), self.domain_sel))
+        mask1 = (self.domain_mask == 1).to(self.y_seq.device)
+        mask2 = torch.isin(torch.arange(self.domain_mask.shape[0]).to(self.y_seq.device), self.domain_sel)
+        print(f"{self.y_seq[mask1 & mask2].shape}")
+        exit(0)
         # E_q[log p(y|z)]
-        # y_seq_source = self.y_seq[self.domain_mask == 1]
-        # f_seq_source = self.f_seq[self.domain_mask == 1]
-        y_seq_source = self.y_seq[mask1 & mask2]
-        f_seq_source = self.f_seq[mask1 & mask2]
-        if y_seq_source.shape[0] == 0:
-            loss_p_y_z = torch.tensor([0]).to(y_seq_source.device)
-        else:
-            loss_p_y_z = -F.nll_loss(
-                flat(f_seq_source).squeeze(), flat(y_seq_source))
-        
+        y_seq_source = self.y_seq[self.domain_mask == 1]
+        f_seq_source = self.f_seq[self.domain_mask == 1]
+        loss_p_y_z = -F.nll_loss(
+            flat(f_seq_source).squeeze(), flat(y_seq_source))
+
         # E_q[log p(\beta|\alpha)]
         # assuming alpha mean = 0
-        # print(self.beta_log_var_seq.shape)  # num_domain, 2
-        var_beta = torch.exp(self.beta_log_var_seq * self.domain_sel_broadcast) 
+        var_beta = torch.exp(self.beta_log_var_seq)
         # To reproduce the exact result of our experiment, use the following line to replace the loss_beta_alpha:
         loss_beta_alpha = -torch.mean((var_beta**2).sum(dim=1))
         # Actually the previous line is wrong because based on our formula, it should be var_beta, not var_beta**2.
@@ -454,19 +443,18 @@ class BaseModel(nn.Module):
 
         # loss for u and beta
         # log p(u|beta)
-        
         beta_t = self.beta_U_seq.unsqueeze(dim=1).expand(
-            -1, self.tmp_batch_size, -1) 
+            -1, self.tmp_batch_size, -1)
         # now beta_t is domain x batch x domain idx dim
-        loss_p_u_beta = ((self.u_seq - beta_t)**2).sum(2) * self.domain_sel_broadcast
-        loss_p_u_beta = -torch.mean(loss_p_u_beta) 
+        loss_p_u_beta = ((self.u_seq - beta_t)**2).sum(2)
+        loss_p_u_beta = -torch.mean(loss_p_u_beta)
 
         # concentrate loss
         loss_u_concentrate = self.contrastive_loss(self.u_con_seq)
 
         # reconstruction loss (p(x|u))
-        loss_p_x_u = ((flat(self.x_seq) - flat(self.r_x_seq))**2).sum(1) * self.domain_sel_broadcast
-        loss_p_x_u = -torch.mean(loss_p_x_u) 
+        loss_p_x_u = ((flat(self.x_seq) - flat(self.r_x_seq))**2).sum(1)
+        loss_p_x_u = -torch.mean(loss_p_x_u)
 
         # gan loss (adversarial loss)
         if self.opt.lambda_gan != 0:
@@ -475,7 +463,7 @@ class BaseModel(nn.Module):
             loss_E_gan = torch.tensor(0,
                                       dtype=torch.double,
                                       device=self.opt.device)
-            
+
         loss_E = loss_E_gan * self.opt.lambda_gan + self.opt.lambda_u_concentrate * loss_u_concentrate - (
             self.opt.lambda_reconstruct * loss_p_x_u + self.opt.lambda_beta *
             loss_p_u_beta + self.opt.lambda_beta_alpha * loss_beta_alpha +
@@ -488,27 +476,6 @@ class BaseModel(nn.Module):
 
         self.optimizer_D.step()
         self.optimizer_UZF.step()
-        flag = False
-        # if self.epoch > 79:
-        #     print(self.epoch)
-        #     if np.isnan(loss_p_z_x_u.item()):
-        #         print(flat(self.p_z_log_var_seq).mean())
-        #         print(torch.exp(flat(self.q_z_log_var_seq)).mean())  # inf
-        #         print(((flat(self.q_z_mu_seq) - flat(self.p_z_mu_seq))**2).mean())
-        #         print(flat(torch.exp(self.p_z_log_var_seq)).mean())  # inf
-
-        #     for elem in [self.loss_D.item(), -loss_p_y_z.item(), loss_q_u_x.item(), 
-        #                  loss_q_z_x_u.item(), loss_p_z_x_u.item(), loss_u_concentrate.item(), -loss_p_x_u.item(), 
-        #                  -loss_p_u_beta.item(), -loss_beta_alpha.item()]:
-        #         if np.isnan(elem):
-        #             flag=True
-        #             print(self.epoch, elem)
-        #     if flag:
-        #         for elem in [self.loss_D.item(), -loss_p_y_z.item(), loss_q_u_x.item(), 
-        #                  loss_q_z_x_u.item(), loss_p_z_x_u.item(), loss_u_concentrate.item(), -loss_p_x_u.item(), 
-        #                  -loss_p_u_beta.item(), -loss_beta_alpha.item()]:
-        #             print(elem)
-        #         exit(0)
 
         return self.loss_D.item(), -loss_p_y_z.item(), loss_q_u_x.item(
         ), loss_q_z_x_u.item(), loss_p_z_x_u.item(), loss_u_concentrate.item(
@@ -682,10 +649,10 @@ class VDI(BaseModel):
                     A[j][i] = Wd
                 except Exception as e:
                     # TODO: assign a large value on it?
-                    A[i][j] = LARGE_NUM
-                    A[j][i] = LARGE_NUM
+                    A[i][j] = 1e10
+                    A[j][i] = 1e10
                     pass
-        factor = int(self.num_domain ** 2 / 3) 
+        factor = int(self.opt.k**2 * 1 / 3) + self.num_domain
         bound = np.sort(A.flatten())[factor]
         # print(f"{bound}\n********before************\n{A}\n", file=open(f"./check_{self.opt.online}.txt", 'a'))
         A_dis = A
@@ -716,20 +683,15 @@ class VDI(BaseModel):
     def __loss_D_grda__(self, d_seq):
         # this is for GRDA
         A = self.A
-        
+
         criterion = nn.BCEWithLogitsLoss()
-        d = (d_seq.reshape(d_seq.shape[0], -1) * self.domain_sel_broadcast).reshape(*d_seq.shape)
+        d = d_seq
         # random pick subchain and optimize the D
         # balance coefficient is calculate by pos/neg ratio
         # A is the adjancency matrix
-        if self.opt.online:
-            my_sample = min(self.opt.k-1, self.opt.sample_v)
-        else:
-            my_sample=self.opt.sample_v
         
-        sub_graph = self.__sub_graph__(my_sample_v=my_sample, A=A)
+        sub_graph = self.__sub_graph__(my_sample_v=self.opt.sample_v, A=A)
         # print(A.shape,len(sub_graph),sub_graph)
-        # print(my_sample, sub_graph)
         # exit(0)
 
         errorD_connected = torch.zeros((1, )).to(self.device)  # .double()
@@ -738,12 +700,10 @@ class VDI(BaseModel):
         count_connected = 0
         count_disconnected = 0
 
-        for i in range(my_sample):
+        for i in range(self.opt.sample_v):
             v_i = sub_graph[i]
-            # print(sub_graph, i)
             # no self loop version!!
-            for j in range(i + 1, my_sample):
-                # print(sub_graph, i, j)
+            for j in range(i + 1, self.opt.sample_v):
                 v_j = sub_graph[j]
                 label = torch.full(
                     (self.tmp_batch_size, ),
@@ -763,6 +723,7 @@ class VDI(BaseModel):
                 else:
                     errorD_disconnected += criterion(output, label)
                     count_disconnected += 1
+
         # prevent nan
         if count_connected == 0:
             count_connected = 1
@@ -777,11 +738,11 @@ class VDI(BaseModel):
     def __sub_graph__(self, my_sample_v, A):
         # sub graph tool for grda loss
         # sample how many domains
-        # print(f"{my_sample_v}\n********and************\n{A}\n", file=open(f"./check_{self.opt.online}.txt", 'a'))
-        # if np.random.randint(0, 2) == 0:
-        #     return np.random.choice(self.num_domain,
-        #                             size=my_sample_v,
-        #                             replace=False)
+        print(f"{my_sample_v}\n********and************\n{A}\n", file=open(f"./check_{self.opt.online}.txt", 'a'))
+        if np.random.randint(0, 2) == 0:
+            return np.random.choice(self.num_domain,
+                                    size=my_sample_v,
+                                    replace=False)
 
         # subsample a chain (or multiple chains in graph)
         left_nodes = my_sample_v
@@ -791,15 +752,9 @@ class VDI(BaseModel):
             chain_node, node_num = self.__rand_walk__(vis, left_nodes, A)
             choosen_node.extend(chain_node)
             left_nodes -= node_num
-        # print(f"chosen_node: {choosen_node}", file=open(f"./check_{self.opt.online}.txt", 'a'))
+        print(f"chosen_node: {choosen_node}", file=open(f"./check_{self.opt.online}.txt", 'a'))
         # exit(0)
-        if self.opt.online:
-            select_list = list(self.domain_sel.flatten())
-            random.shuffle(select_list[:my_sample_v])
-            # return select_list
-            return choosen_node
-        else:
-            return choosen_node
+        return choosen_node
 
     def __rand_walk__(self, vis, left_nodes, A):
         # graph random sampling tool for grda loss

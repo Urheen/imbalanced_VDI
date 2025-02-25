@@ -1,7 +1,10 @@
 import numpy as np
+import torch
 from torch.utils.data import DataLoader, Dataset
-import pickle
-
+import pickle, random
+from torch.utils.data import Sampler
+import math
+from collections import deque
 
 def read_pickle(name):
     with open(name, 'rb') as f:
@@ -45,6 +48,193 @@ class SeqToyDataset(Dataset):
 
     def __len__(self):
         return self.size
-
+    
     def __getitem__(self, i):
         return [ds[i] for ds in self.datasets]
+    
+
+class ziyanSeqToyDataset(Dataset):
+    def __init__(self, datasets, size=3*200, k=None):
+        self.datasets = datasets
+        self.size = size
+        self.k = k if k is not None else len(datasets)
+        self._current_subset = None
+        
+        # 验证所有子数据集长度一致
+        assert all(len(ds) == len(datasets[0]) for ds in datasets)
+        print(f'SeqDataset Size {size}, Sub Size {[len(ds) for ds in datasets]}')
+
+    def set_current_subset(self, subset):
+        """设置当前batch使用的子数据集索引"""
+        self._current_subset = subset
+
+    def __len__(self):
+        return self.size
+
+    def __getitem__(self, i):
+        if self._current_subset is None:
+            # 默认模式（k=10时的原始行为）
+            return [ds[i] for ds in self.datasets]
+        
+        # 使用当前设置的子数据集
+        return [self.datasets[idx][i] for idx in self._current_subset]
+
+class KSubsetDataLoader:
+    def __init__(self, dataset, batch_size, k, shuffle=True, drop_last=False):
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.k = k
+        self.shuffle = shuffle
+        self.drop_last = drop_last
+        
+        # 计算样本总数和batch数量
+        self.num_samples = len(dataset)
+        if self.drop_last:
+            self.num_batches = self.num_samples // batch_size
+        else:
+            self.num_batches = (self.num_samples + batch_size - 1) // batch_size
+        print(f"Total batches: {self.num_batches}")
+
+    def __iter__(self):
+        # 生成全局索引序列
+        indices = torch.arange(self.num_samples)
+        if self.shuffle:
+            indices = torch.randperm(self.num_samples)
+        
+        # 分批处理
+        for batch_idx in range(self.num_batches):
+            # 计算当前batch的索引范围
+            start = batch_idx * self.batch_size
+            end = start + self.batch_size
+            if end > self.num_samples:
+                if self.drop_last:
+                    continue
+                end = self.num_samples
+            batch_indices = indices[start:end]
+            
+            # 随机选择k个子数据集并排序
+            subset = np.random.choice(
+                len(self.dataset.datasets),
+                self.k,
+                replace=False
+            )
+            # 获取domain并排序
+            subset_domains = [self.dataset.datasets[i].domain for i in subset]
+            sorted_idx = np.argsort(subset_domains)
+            sorted_subset = subset[sorted_idx].tolist()
+            
+            self.dataset.set_current_subset(sorted_subset)
+            
+            # 收集样本并处理
+            batch = [self.dataset[i.item()] for i in batch_indices]
+            yield self.collate_fn(batch)
+
+    @staticmethod
+    def collate_fn(batch):
+        """重组数据结构并按domain排序"""
+        # 将原始batch结构转换为三维张量
+        data = torch.stack([
+            torch.stack([torch.from_numpy(s[0]) for s in sample])
+            for sample in batch
+        ])  # (batch_size, k, features)
+        
+        labels = torch.stack([
+            torch.LongTensor([s[1] for s in sample])
+            for sample in batch
+        ])  # (batch_size, k)
+        
+        domains = torch.stack([
+            torch.LongTensor([s[2] for s in sample])
+            for sample in batch
+        ])  # (batch_size, k)
+        
+        # 按子数据集拆分并重组
+        k = data.size(1)
+        output = []
+        for i in range(k):
+            output.append((
+                data[:, i, :],    # (batch_size, features)
+                labels[:, i],     # (batch_size,)
+                domains[:, i]     # (batch_size,)
+            ))
+        return output
+
+    def __len__(self):
+        return self.num_batches
+
+
+class OnlineSeqToyDataset(Dataset):
+    # the size may change because of the toy dataset!!
+    def __init__(self, datasets, size=3 * 200):
+        self.datasets = datasets
+        self.size = size
+        print('SeqDataset Size {} Sub Size {}'.format(
+            size, [len(ds) for ds in datasets]))
+
+    def __len__(self):
+        return self.size
+
+    def __getitem__(self, batch_info):
+        selected_subsets, batch_indices = batch_info
+        # print(selected_subsets)
+        batch_data = []
+
+        for ds in selected_subsets:
+            samples = [self.datasets[ds][idx] for idx in batch_indices[ds]]
+            # for feature_list in zip(*samples):
+            #     print(torch.tensor(np.stack(feature_list)).shape)
+            # exit(0)
+            stacked_tensors = tuple(torch.tensor(feature_list) for feature_list in zip(*samples))
+            # print(stacked_tensors[0].shape)
+            batch_data.append(stacked_tensors)
+        # print(batch_data[0][0].shape)  # 32,2
+        return batch_data
+
+class OnlineBatchSampler(Sampler):
+    def __init__(self, num_subsets, k, batch_size, size=3 * 200):
+        """
+        dataset_size: 每个子dataset的大小（假设所有子dataset长度相同）
+        num_subsets: 总子数据集数（比如 10 个）
+        k: 每个 batch 选择的子数据集数（比如 3 个）
+        batch_size: 每个 batch 的数据量（比如 32，每个子数据集都取 32）
+        """
+        self.dataset_size = size
+        self.num_subsets = num_subsets
+        self.k = k
+        self.batch_size = batch_size
+
+        self._reset()
+
+    def _reset(self):
+        self.remaining_indices = {i: list(range(self.dataset_size)) for i in range(self.num_subsets)}
+
+        # **随机打乱每个子数据集的索引**
+        for i in self.remaining_indices:
+            random.shuffle(self.remaining_indices[i])
+
+    def __iter__(self):
+        while True:
+            # **2️⃣ 找到至少有 batch_size 个数据的子数据集**
+            available_subsets = [i for i in self.remaining_indices if len(self.remaining_indices[i]) >= self.batch_size]
+
+            # **3️⃣ 如果可用子数据集小于 `k`，则终止**
+            if len(available_subsets) < self.k:
+                # print(self.remaining_indices)
+                break  # 没有足够的子数据集来填充 batch 了
+
+            # **4️⃣ 随机选择 `k` 个可用子数据集**
+            selected_subsets = random.sample(available_subsets, self.k)
+            selected_subsets = sorted(selected_subsets, reverse=False)
+
+            # **5️⃣ 取 `batch_size` 个数据**
+            batch_indices = {}
+            for dataset_idx in selected_subsets:
+                batch_indices[dataset_idx] = self.remaining_indices[dataset_idx][:self.batch_size]
+                self.remaining_indices[dataset_idx] = self.remaining_indices[dataset_idx][self.batch_size:]  # **移除已使用索引**
+
+            yield selected_subsets, batch_indices
+
+    def __len__(self):
+        total_samples = sum(len(indices) for indices in self.remaining_indices.values())
+        return math.ceil(total_samples / self.batch_size)  # 计算 batch 数
+

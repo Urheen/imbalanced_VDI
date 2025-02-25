@@ -130,7 +130,6 @@ class UNet(nn.Module):
 
     def forward(self, x):
         re = x.dim() == 3
-
         if re:
             T, B, C = x.shape
             x = x.reshape(T * B, -1)
@@ -324,7 +323,8 @@ class Q_ZNet_beta(nn.Module):
         self.fc_p_mu_2 = nn.Linear(nh, nh)
         self.fc_p_log_var_2 = nn.Linear(nh, nh)
 
-    def encode(self, x, u, beta):
+    def encode(self, x, u, beta, domain_sel):
+        # print(x.shape, u.shape, beta.shape)
         x = F.relu(self.fc1(x))
         u = F.relu(self.fc1_u(u.float()))
         u = F.relu(self.fc2_u(u))
@@ -336,15 +336,19 @@ class Q_ZNet_beta(nn.Module):
         # beta dim
         # dim: domain x h
 
-        tmp_B = int(u.shape[0] / beta.shape[0])
-
-        beta = beta.unsqueeze(dim=1).expand(-1, tmp_B,
+        #改版：从 num_domain 变成 K
+        tmp_B = int(u.shape[0] / self.opt.k)
+        # print(beta.shape, tmp_B)
+        beta = beta[domain_sel,:].unsqueeze(dim=1).expand(-1, tmp_B,
                                             -1).reshape(u.shape[0], -1)
         # beta dim
         # (domain * batch) x h
 
         # combine feature in the middle
+        # print(x.shape, u.shape, beta.shape)
         x = torch.cat((x, u, beta), dim=1)
+        # print(x.shape, self.fc2.weight.shape)
+        # exit(0)
         x = F.relu(self.fc2(x))
         x = F.relu(self.fc3(x))
         x = F.relu(self.fc_final(x))
@@ -367,7 +371,7 @@ class Q_ZNet_beta(nn.Module):
         x = mu + std * eps
         return x
 
-    def forward(self, x, u, beta):
+    def forward(self, x, u, beta, domain_sel):
         re = x.dim() == 3
 
         if re:
@@ -375,7 +379,7 @@ class Q_ZNet_beta(nn.Module):
             x = x.reshape(T * B, -1)
             u = u.reshape(T * B, -1)
 
-        q_mu, q_log_var, p_mu, p_log_var = self.encode(x, u, beta)
+        q_mu, q_log_var, p_mu, p_log_var = self.encode(x, u, beta, domain_sel)
         q_z = self.reparameterize(q_mu, q_log_var)
         p_z = self.reparameterize(p_mu, p_log_var)
 
