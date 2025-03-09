@@ -24,7 +24,7 @@ opt.use_pretrain_R = False
 opt.fix_u_r = False
 opt.use_pretrain_model_all = False
 
-opt.d_loss_type = "DANN_loss_mean"  # "CIDA_loss" # "GRDA_loss" # "DANN_loss"
+opt.d_loss_type = "DANN_loss_mean"  # "CIDA_loss" # "GRDA_loss" # "DANN_loss" "DANN_loss_mean"
 
 # for warm up
 opt.init_lr = 1e-6
@@ -61,3 +61,18 @@ opt.input_dim = 2  # the dimension of input data x
 
 opt.u_dim = 2  # the dimension of local domain index u
 opt.beta_dim = 2  # the dimension of global domain index beta
+
+# online settings, # of domain in each batch
+opt.online = True
+# opt.online = False
+
+if opt.online:
+    opt.k = opt.num_domain
+    opt.use_selector = False
+    opt.n_neighbors = opt.batch_size - 1
+    opt.num_filtersamples = opt.batch_size
+else:
+    opt.k = opt.num_domain
+    opt.use_selector = False
+    opt.n_neighbors = 0
+    opt.num_filtersamples = 0

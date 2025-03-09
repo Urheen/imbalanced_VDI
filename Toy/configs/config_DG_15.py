@@ -7,6 +7,8 @@ opt = EasyDict()
 
 opt.src_domain_idx = [0, 12, 3, 4, 14, 8]
 opt.tgt_domain_idx = [1, 2, 5, 6, 7, 9, 10, 11, 13]
+# opt.src_domain_idx = [0, 3, 4, 8]
+# opt.tgt_domain_idx = [1, 2, 5, 6, 7, 9]
 opt.all_domain_idx = opt.src_domain_idx + opt.tgt_domain_idx
 opt.num_source = len(opt.src_domain_idx)
 opt.num_target = len(opt.tgt_domain_idx)
@@ -36,7 +38,7 @@ opt.final_lr = 1e-8
 opt.warmup_steps = 70
 
 opt.seed = 2333
-opt.num_epoch = 500
+opt.num_epoch = 2000
 opt.batch_size = 32
 
 opt.use_visdom = False  # True
@@ -46,7 +48,7 @@ tmp_time = localtime()
 opt.outf = "result_save/{}".format(strftime("%Y-%m-%d %H:%M:%S", tmp_time))
 
 opt.save_interval = 100
-opt.test_interval = 20  # 20
+opt.test_interval = 2  # 20
 
 opt.device = "cuda"
 opt.gpu_device = "0"
@@ -72,6 +74,12 @@ opt.online = True
 # opt.online = False
 
 if opt.online:
-    opt.k = 15
+    opt.k = opt.num_domain
+    opt.use_selector = False
+    opt.n_neighbors = opt.batch_size - 1
+    opt.num_filtersamples = opt.batch_size
 else:
     opt.k = opt.num_domain
+    opt.use_selector = False
+    opt.n_neighbors = 0
+    opt.num_filtersamples = 0

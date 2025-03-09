@@ -1,0 +1,120 @@
+2025-03-07 20:19:26.344500: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:485] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-03-07 20:19:26.358145: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:8454] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-03-07 20:19:26.362355: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1452] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-03-07 20:19:27.592795: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+Data: (1500, 2)
+Label: (1500,)
+ziyanSeqToyDataset Size 100, Sub Size [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]
+[Test][0] Accuracy: total average 51.9, test average 51.2, in each domain [61.5 52.1 50.  54.2 45.8 47.9 52.1 50.  57.3 53.1 53.1 57.3 45.8 44.8
+ 53.1]
+epoch 0, loss: {'D': 10.397211074829102, 'E_pred': 0.27712365984916687, 'Q_u_x': -8.607527732849121, 'Q_z_x_u': 1.6586866877332795e-05, 'P_z_x_u': -256.00002034505206, 'U_beta_R': 2.0599097410837808, 'U_concentrate': 6.1758443514506025, 'R': 0.0028731695686777434, 'P_beta_alpha': 2.0026767253875732}, lambda gan: 0.6
+[Test][1] Accuracy: total average 51.9, test average 52.2, in each domain [51.  55.2 59.4 52.1 54.2 50.  51.  55.2 49.  43.8 53.1 52.1 52.1 50.
+ 51. ]
+[Test][3] Accuracy: total average 50.7, test average 50.7, in each domain [49.  54.2 52.1 51.  50.  50.  53.1 50.  54.2 45.8 47.9 46.9 52.1 56.2
+ 47.9]
+[Test][5] Accuracy: total average 50.2, test average 50.5, in each domain [46.9 52.1 51.  45.8 43.8 47.9 54.2 51.  51.  49.  40.6 54.2 56.2 54.2
+ 55.2]
+[Test][7] Accuracy: total average 50.3, test average 50.3, in each domain [45.8 57.3 51.  50.  54.2 51.  46.9 49.  54.2 47.9 49.  46.9 44.8 54.2
+ 52.1]
+epoch 9, loss: {'D': 10.397207895914713, 'E_pred': 0.2771831850210826, 'Q_u_x': -7.390616416931152, 'Q_z_x_u': -0.0001534991145793659, 'P_z_x_u': -255.9998575846354, 'U_beta_R': 1.9887218475341797, 'U_concentrate': 6.1178005536397295, 'R': 0.009043277241289616, 'P_beta_alpha': 1.991005261739095}, lambda gan: 0.6
+[Test][9] Accuracy: total average 52.4, test average 51.2, in each domain [51.  47.9 58.3 50.  55.2 45.8 50.  52.1 56.2 51.  45.8 57.3 53.1 52.1
+ 60.4]
+[Test][11] Accuracy: total average 50.3, test average 51.2, in each domain [43.8 53.1 52.1 47.9 46.9 46.9 50.  49.  49.  50.  52.1 53.1 52.1 54.2
+ 54.2]
+[Test][13] Accuracy: total average 49.9, test average 49.8, in each domain [50.  46.9 45.8 50.  43.8 52.1 47.9 54.2 52.1 47.9 46.9 49.  57.3 57.3
+ 46.9]
+[Test][15] Accuracy: total average 49.0, test average 49.0, in each domain [47.9 47.9 51.  52.1 53.1 53.1 49.  44.8 50.  53.1 42.7 49.  43.8 50.
+ 47.9]
+[Test][17] Accuracy: total average 47.9, test average 48.6, in each domain [45.8 55.2 50.  41.7 49.  46.9 44.8 54.2 44.8 50.  46.9 44.8 44.8 44.8
+ 55.2]
+epoch 19, loss: {'D': 10.397207260131836, 'E_pred': 0.27724050482114154, 'Q_u_x': -4.814944903055827, 'Q_z_x_u': -0.0009274870196046928, 'P_z_x_u': -255.99909464518228, 'U_beta_R': 1.9794448216756184, 'U_concentrate': 6.079675833384196, 'R': 0.08636463930209477, 'P_beta_alpha': 1.9470028479894002}, lambda gan: 0.6
+[Test][19] Accuracy: total average 50.1, test average 50.1, in each domain [46.9 50.  47.9 57.3 50.  52.1 47.9 44.8 49.  56.2 51.  47.9 49.  53.1
+ 47.9]
+[Test][21] Accuracy: total average 49.4, test average 48.5, in each domain [53.1 49.  46.9 56.2 50.  45.8 43.8 50.  54.2 54.2 46.9 46.9 44.8 53.1
+ 45.8]
+[Test][23] Accuracy: total average 49.2, test average 50.1, in each domain [49.  47.9 55.2 51.  47.9 50.  47.9 55.2 44.8 50.  45.8 50.  42.7 49.
+ 51. ]
+[Test][25] Accuracy: total average 50.1, test average 50.9, in each domain [52.1 49.  50.  47.9 52.1 47.9 45.8 61.5 39.6 53.1 46.9 51.  53.1 53.1
+ 47.9]
+[Test][27] Accuracy: total average 48.7, test average 49.5, in each domain [50.  58.3 49.  45.8 49.  43.8 57.3 36.5 42.7 53.1 46.9 53.1 50.  47.9
+ 46.9]
+epoch 29, loss: {'D': 10.397207260131836, 'E_pred': 0.2771943112214406, 'Q_u_x': -4.53840970993042, 'Q_z_x_u': -0.003805888661493858, 'P_z_x_u': -255.99620056152344, 'U_beta_R': 2.1487016677856445, 'U_concentrate': 5.688467025756836, 'R': 0.08760514358679454, 'P_beta_alpha': 1.8440028031667073}, lambda gan: 0.6
+[Test][29] Accuracy: total average 50.8, test average 51.3, in each domain [45.8 49.  60.4 51.  56.2 56.2 51.  51.  54.2 49.  46.9 46.9 46.9 51.
+ 45.8]
+[Test][31] Accuracy: total average 49.4, test average 48.8, in each domain [52.1 50.  46.9 50.  49.  42.7 53.1 55.2 49.  44.8 53.1 45.8 49.  47.9
+ 53.1]
+[Test][33] Accuracy: total average 49.9, test average 50.0, in each domain [51.  50.  49.  47.9 50.  47.9 51.  52.1 51.  52.1 51.  47.9 50.  49.
+ 47.9]
+[Test][35] Accuracy: total average 49.6, test average 48.7, in each domain [49.  44.8 47.9 47.9 53.1 50.  51.  46.9 54.2 47.9 50.  50.  49.  50.
+ 52.1]
+[Test][37] Accuracy: total average 53.1, test average 50.9, in each domain [62.5 40.6 49.  53.1 56.2 55.2 56.2 42.7 55.2 45.8 56.2 60.4 54.2 52.1
+ 56.2]
+epoch 39, loss: {'D': 10.397207578023275, 'E_pred': 0.27607690294583637, 'Q_u_x': -4.203963915506999, 'Q_z_x_u': -0.00608580590536197, 'P_z_x_u': -255.99441528320312, 'U_beta_R': 2.309546629587809, 'U_concentrate': 5.631980578104655, 'R': 0.0938354233900706, 'P_beta_alpha': 1.6065889596939087}, lambda gan: 0.6
+[Test][39] Accuracy: total average 54.1, test average 47.5, in each domain [53.1 33.3 50.  67.7 77.1 61.5 54.2 31.2 67.7 37.5 53.1 52.1 60.4 54.2
+ 58.3]
+[Test][41] Accuracy: total average 65.0, test average 52.2, in each domain [72.9 14.6 65.6 88.5 86.5 77.1 58.3 16.7 90.6 36.5 47.9 82.3 89.6 70.8
+ 77.1]
+[Test][43] Accuracy: total average 67.9, test average 53.7, in each domain [81.2  5.2 63.5 90.6 89.6 91.7 66.7  8.3 89.6 38.5 45.8 93.8 91.7 69.8
+ 92.7]
+[Test][45] Accuracy: total average 74.0, test average 57.2, in each domain [ 95.8   0.   78.1 100.  100.  100.   69.8   0.  100.   27.1  53.1 100.
+ 100.   86.5 100. ]
+[Test][47] Accuracy: total average 73.9, test average 56.9, in each domain [ 95.8   0.   76.  100.  100.  100.   75.    0.  100.   27.1  55.2 100.
+ 100.   79.2 100. ]
+epoch 49, loss: {'D': 10.397207260131836, 'E_pred': 0.00870982464402914, 'Q_u_x': -4.093991756439209, 'Q_z_x_u': 0.16453405718008676, 'P_z_x_u': -256.17689005533856, 'U_beta_R': 2.3776272932688394, 'U_concentrate': 5.646498839060466, 'R': 0.0968283216158549, 'P_beta_alpha': 1.185831864674886}, lambda gan: 0.6
+[Test][49] Accuracy: total average 70.0, test average 50.2, in each domain [ 97.9   0.   67.7 100.  100.   99.   61.5   0.  100.   17.7  35.4 100.
+ 100.   70.8 100. ]
+[Test][51] Accuracy: total average 66.0, test average 43.6, in each domain [ 97.9   1.   52.1 100.  100.  100.   49.    0.   99.    7.3  25.   96.9
+ 100.   61.5 100. ]
+[Test][53] Accuracy: total average 64.0, test average 39.9, in each domain [100.    0.   47.9 100.  100.   99.   40.6   0.  100.    5.2  16.7  96.9
+ 100.   53.1 100. ]
+[Test][55] Accuracy: total average 61.6, test average 36.2, in each domain [ 99.    0.   39.6 100.  100.   96.9  36.5   0.   99.    0.   10.4  93.8
+ 100.   49.  100. ]
+[Test][57] Accuracy: total average 64.4, test average 40.7, in each domain [100.    0.   49.  100.  100.   99.   40.6   0.  100.    6.2  17.7  96.9
+ 100.   57.3 100. ]
+epoch 59, loss: {'D': 10.397207260131836, 'E_pred': 0.00022977030554708713, 'Q_u_x': -4.045352300008138, 'Q_z_x_u': 0.27782655755678815, 'P_z_x_u': -256.2787272135417, 'U_beta_R': 2.383965810139974, 'U_concentrate': 5.63621457417806, 'R': 0.09590353568394978, 'P_beta_alpha': 0.7081502477327982}, lambda gan: 0.6
+[Test][59] Accuracy: total average 65.8, test average 42.9, in each domain [100.    0.   55.2 100.  100.   99.   51.    0.  100.    3.1  18.8 100.
+ 100.   59.4 100. ]
+[Test][61] Accuracy: total average 66.4, test average 44.1, in each domain [ 99.    0.   56.2 100.  100.  100.   53.1   0.  100.    8.3  20.8  97.9
+ 100.   60.4 100. ]
+[Test][63] Accuracy: total average 67.1, test average 45.1, in each domain [100.    0.   59.4 100.  100.  100.   56.2   0.  100.   11.5  19.8  97.9
+ 100.   61.5 100. ]
+[Test][65] Accuracy: total average 67.1, test average 45.1, in each domain [100.    0.   62.5 100.  100.  100.   50.    0.  100.   10.4  24.   96.9
+ 100.   62.5 100. ]
+[Test][67] Accuracy: total average 66.9, test average 44.9, in each domain [100.    0.   58.3 100.  100.  100.   51.    0.  100.    7.3  21.9  99.
+ 100.   66.7 100. ]
+epoch 69, loss: {'D': 10.397207895914713, 'E_pred': 0.006191912427311763, 'Q_u_x': -3.9284022649129233, 'Q_z_x_u': 0.25824137528737384, 'P_z_x_u': -256.25946044921875, 'U_beta_R': 2.5151145458221436, 'U_concentrate': 5.630655447642009, 'R': 0.09406600644191106, 'P_beta_alpha': 0.3752066691716512}, lambda gan: 0.6
+[Test][69] Accuracy: total average 66.6, test average 44.3, in each domain [100.    0.   58.3 100.  100.  100.   49.    0.  100.    7.3  21.9 100.
+ 100.   62.5 100. ]
+[Test][71] Accuracy: total average 66.3, test average 44.1, in each domain [ 99.    0.   55.2 100.  100.  100.   51.    0.   99.    9.4  22.9  96.9
+ 100.   61.5 100. ]
+[Test][73] Accuracy: total average 64.9, test average 41.7, in each domain [100.    0.   50.  100.  100.   99.   44.8   0.   99.    9.4  17.7  94.8
+ 100.   59.4 100. ]
+[Test][75] Accuracy: total average 63.3, test average 38.9, in each domain [100.    0.   43.8 100.  100.   96.9  38.5   0.  100.    4.2  15.6  99.
+ 100.   52.1 100. ]
+[Test][77] Accuracy: total average 65.1, test average 41.9, in each domain [100.    1.   51.  100.  100.   97.9  47.9   0.  100.    4.2  21.9  95.8
+ 100.   57.3 100. ]
+epoch 79, loss: {'D': 9.923917134602865, 'E_pred': 0.008625024061378403, 'Q_u_x': -3.9230852127075195, 'Q_z_x_u': 0.3034769495328267, 'P_z_x_u': -256.3810628255208, 'U_beta_R': 2.5220772425333657, 'U_concentrate': 5.633569399515788, 'R': 0.0983845666050911, 'P_beta_alpha': 0.20889554421106973}, lambda gan: 0.6
+[Test][79] Accuracy: total average 75.1, test average 58.9, in each domain [ 97.9   5.2  78.1 100.  100.  100.   75.    2.1  99.   35.4  52.1  99.
+ 100.   83.3 100. ]
+[Test][81] Accuracy: total average 84.2, test average 78.6, in each domain [ 72.9  25.   95.8  96.9  95.8  95.8  99.   25.  100.   83.3  87.5  97.9
+  92.7  97.9  97.9]
+[Test][83] Accuracy: total average 88.1, test average 85.2, in each domain [ 70.8  44.8  97.9  95.8  92.7  99.   97.9  49.   99.   85.4  94.8  97.9
+  96.9 100.  100. ]
+[Test][85] Accuracy: total average 88.7, test average 85.5, in each domain [ 68.8  39.6  99.   95.8  97.9 100.   97.9  47.9 100.   91.7  93.8 100.
+  99.  100.   99. ]
+[Test][87] Accuracy: total average 88.3, test average 83.8, in each domain [ 77.1  39.6  96.9  99.   95.8  99.   97.9  43.8  99.   85.4  94.8  99.
+ 100.   97.9  99. ]
+epoch 89, loss: {'D': 10.37771479288737, 'E_pred': 0.05357892066240311, 'Q_u_x': -3.8760501543680825, 'Q_z_x_u': 0.6310486396153768, 'P_z_x_u': -256.6352132161458, 'U_beta_R': 2.487269322077433, 'U_concentrate': 5.639854749043782, 'R': 0.09699632972478867, 'P_beta_alpha': 0.133521169424057}, lambda gan: 0.6
+[Test][89] Accuracy: total average 88.0, test average 83.0, in each domain [ 77.1  29.2 100.   99.   97.9  99.   99.   35.4 100.   89.6  94.8 100.
+  99.  100.  100. ]
+[Test][91] Accuracy: total average 86.9, test average 80.6, in each domain [ 79.2  21.9  97.9  99.  100.  100.   99.   29.2 100.   84.4  94.8  99.
+ 100.   99.  100. ]
+[Test][93] Accuracy: total average 88.7, test average 83.3, in each domain [ 80.2  25.  100.  100.  100.  100.  100.   36.5 100.   89.6  99.  100.
+ 100.  100.  100. ]
+[Test][95] Accuracy: total average 89.7, test average 84.7, in each domain [ 83.3  34.4  99.  100.   99.   99.  100.   43.8 100.   87.5  99.  100.
+ 100.  100.  100. ]
+[Test][97] Accuracy: total average 91.2, test average 87.7, in each domain [ 78.1  46.9 100.  100.  100.  100.  100.   50.  100.   92.7 100.  100.
+ 100.  100.  100. ]
+epoch 99, loss: {'D': 10.247840563456217, 'E_pred': 0.03927294909954071, 'Q_u_x': -3.9356722036997476, 'Q_z_x_u': 0.5828309655189514, 'P_z_x_u': -256.58753458658856, 'U_beta_R': 2.464406172434489, 'U_concentrate': 5.641009171803792, 'R': 0.09625265250603358, 'P_beta_alpha': 0.09593551109234492}, lambda gan: 0.6
+[Test][99] Accuracy: total average 91.9, test average 89.2, in each domain [ 76.   56.2 100.   99.  100.  100.   99.   53.1 100.   94.8 100.  100.
+ 100.  100.  100. ]

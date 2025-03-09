@@ -69,7 +69,6 @@ opt.beta_dim = 2  # the dimension of global domain index beta
 opt.sample_v = 30
 
 # online settings, # of domain in each batch
-opt.k = 12
 opt.online = True
 # opt.online = False
 

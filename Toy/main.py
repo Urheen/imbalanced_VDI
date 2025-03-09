@@ -55,29 +55,66 @@ data_pkl['data'] = (data - data_mean) / data_std  # normalize the raw data
 datasets = [ToyDataset(data_pkl, i, opt)
             for i in range(opt.num_domain)]  # sub dataset for each domain
 
-# dataset = SeqToyDataset(datasets, size=len(datasets[0]))  # mix sub dataset to a large one
-# dataloader = DataLoader(dataset=dataset, batch_size=opt.batch_size, shuffle=True)
-
 # random.seed(13)
 # dataset = ziyanSeqToyDataset(datasets, size=len(datasets[0]))  # mix sub dataset to a large one
 # dataloader_te = KSubsetDataLoader(
 #     dataset=dataset,
-#     batch_size=32,
-#     k=3,
-#     shuffle=True
+#     batch_size=opt.batch_size,
+#     k=opt.k,
+#     shuffle=True,
+#     drop_last=True
 # )
 
-# for epoch in range(1):
+# dataloader = ziyanKSubsetDataLoader(
+#     dataset=dataset,
+#     batch_size=opt.batch_size,
+#     k=opt.k,
+#     shuffle=True,
+#     drop_last=True
+# )
+
+# for epoch in range(2):
+#     for elem in dataloader_ori:
+#         for d in elem:
+#             # print('ori', epoch, len(elem), len(d), d[0].shape, d[1].shape, d[2].shape, d[2])
+#             break
 
 #     for elem in dataloader:
 #         for d in elem:
-#             print('off', epoch, len(elem), len(d), d[0].shape, d[1].shape, d[2].shape)
+#             # print('ziyan', epoch, len(elem), len(d), d[0].shape, d[1].shape, d[2].shape, d[2])
 #             break
+
+#     for elem in dataloader_te:
+#         for d in elem:
+#             # print('deepseek', epoch, len(elem), len(d), d[0].shape, d[1].shape, d[2].shape, d[2])
+#             break
+#         # break
+# print('==============================')
+# for epoch in range(2):
+
+#     for elem in dataloader:
+#         for d in elem:
+#             print('ziyan', epoch, len(elem), len(d), d[0].shape, d[1].shape, d[2].shape)
+#             break
+
+#     for elem in dataloader_te:
+#         for d in elem:
+#             print('deepseek', epoch, len(elem), len(d), d[0].shape, d[1].shape, d[2].shape)
+#             break
+#         # break
+# exit(0)
+# for epoch in range(2):
+
+#     # for elem in dataloader:
+#     #     for d in elem:
+#     #         print('off', epoch, len(elem), len(d), d[0].shape, d[1].shape, d[2].shape)
+#     #         break
 
 #     for elem in dataloader_te:
 #         for d in elem:
 #             print('on', epoch, len(elem), len(d), d[0].shape, d[1].shape, d[2].shape)
 #             break
+#         break
 # exit(0)
 
     
@@ -93,14 +130,18 @@ if opt.online:
         dataset=dataset,
         batch_size=opt.batch_size,
         k=opt.k,
-        shuffle=True,
-        drop_last=True
+        shuffle=True
     )
     test_loader = KSubsetDataLoader(
         dataset=dataset,
         batch_size=opt.batch_size,
-        k=opt.num_domain,
+        k=opt.num_domain
     )
+    # test_loader = dataloader
+else:
+    dataset = SeqToyDataset(datasets, size=len(datasets[0]))  # mix sub dataset to a large one
+    dataloader = DataLoader(dataset=dataset, batch_size=opt.batch_size, shuffle=True)
+    test_loader = DataLoader(dataset=dataset, batch_size=opt.batch_size)
 
 
 # TODO: this is the test to check whether the online environment is correctly simulated.
@@ -128,7 +169,7 @@ for epoch in range(opt.num_epoch):
 
     # if opt.online:
     #     dataloader.sampler._reset()
-    model.learn(epoch, dataloader, verbose=verbose)
+    model.learn(epoch, dataloader)
 
     if (epoch + 1) % opt.save_interval == 0 or (epoch + 1) == opt.num_epoch:
         model.save()
@@ -139,4 +180,4 @@ for epoch in range(opt.num_epoch):
         #     dataloader = DataLoader(dataset=dataset, sampler=sampler)
         # if opt.online:
         #     test_dataloader.sampler._reset()
-        model.test(epoch, test_loader, (epoch >= 49))
+        model.test(epoch, test_loader)
