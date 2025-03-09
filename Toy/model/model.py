@@ -296,7 +296,7 @@ class BaseModel(nn.Module):
         self.domain_seq = torch.zeros((self.num_domain, *self.domain_seq_tmp.shape[1:])).to(device=self.device, dtype=torch.long)
         self.domain_sel_mask = torch.zeros((self.num_domain, self.x_seq_tmp.shape[1])).to(self.device)
         self.domain_sel_mask[self.domain_sel, :] = 1.0
-        # self.domain_sel_mask.requires_grad = False
+        self.domain_sel_mask.requires_grad = False
         # print(self.domain_sel_mask.shape)
 
         for idx, elem in enumerate(self.domain_sel):
@@ -487,8 +487,6 @@ class BaseModel(nn.Module):
 
         self.optimizer_UZF.zero_grad()
 
-        gradient_mask = self.domain_sel_mask
-
         # - E_q[log q(u|x)]
         # u is multi-dimensional
         # loss_q_u_x = torch.mean((0.5 * flat(self.u_log_var_seq)).sum(1), dim=0)
@@ -559,7 +557,12 @@ class BaseModel(nn.Module):
         loss_p_x_u = -torch.mean(loss_p_x_u) 
 
         # gan loss (adversarial loss)
-        loss_E_gan = -self.loss_D
+        if self.opt.lambda_gan != 0:
+            loss_E_gan = -self.loss_D
+        else:
+            loss_E_gan = torch.tensor(0,
+                                      dtype=torch.double,
+                                      device=self.opt.device)
             
         loss_E = loss_E_gan * self.opt.lambda_gan + self.opt.lambda_u_concentrate * loss_u_concentrate - (
             self.opt.lambda_reconstruct * loss_p_x_u + self.opt.lambda_beta *

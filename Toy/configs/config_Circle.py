@@ -64,7 +64,7 @@ opt.beta_dim = 2  # the dimension of global domain index beta
 
 # online settings, # of domain in each batch
 opt.online = True
-# opt.online = False
+opt.online = False
 
 if opt.online:
     opt.k = opt.num_domain
