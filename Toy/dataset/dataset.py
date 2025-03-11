@@ -106,7 +106,7 @@ class KSubsetDataLoader:
         k = self.k
         n = self.n
         batch_size = self.batch_size
-
+        # print(f"m is {m}, g is {g}, k is {k}, n is {n}, batchsize is {self.batch_size}")
         # subset_indices = list(np.arange(m))
         # check_dict = {i:0 for i in subset_indices}
         # groups = []
@@ -128,12 +128,18 @@ class KSubsetDataLoader:
             groups.extend([subset_indices[i*k : (i+1)*k] for i in range(g)])
         if self.shuffle:
             np.random.shuffle(groups)
+        # print('groups', groups)
+        # for elem in groups:
+        #     print(elem)
+        # print('end group')
+        # if self.shuffle:
+        #     np.random.shuffle(groups)
         
         all_batches = []
         indices_order = np.arange(n)
         if self.shuffle:
             np.random.shuffle(indices_order)
-        indices = [indices_order for _ in range(m) ]
+        indices = [indices_order for _ in range(m)]
 
         # if self.shuffle:
         #     for elem in indices:
@@ -148,11 +154,16 @@ class KSubsetDataLoader:
                 batches.append(batch_indices)
             
             # Record group and batch indices
-            all_batches.extend([(group, batches)])
+            all_batches.append((group, batches))
+        # print('all batch', all_batches)
+        # for elem in all_batches:
+        #     print(elem)
+        # print('end all batch')
         # print(f"before {len(all_batches)}, {all_batches}")
         # print('ziyan', len(all_batches), len(all_batches[0][1]))
         if self.shuffle:
             np.random.shuffle(all_batches)
+
         # print(f"after {len(all_batches)}, {all_batches}")
         # exit(0)
         for group, batch_indices in all_batches:

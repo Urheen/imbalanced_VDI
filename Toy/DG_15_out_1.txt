@@ -1,7 +1,7 @@
-2025-03-10 08:24:22.965068: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:485] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
-2025-03-10 08:24:22.980466: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:8454] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
-2025-03-10 08:24:22.984712: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1452] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
-2025-03-10 08:24:24.147420: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+2025-03-10 08:26:27.979020: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:485] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-03-10 08:26:27.992904: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:8454] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-03-10 08:26:27.997085: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1452] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-03-10 08:26:29.157542: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
 ===> Discriminator will distinguish 30 domains
 Data: (3000, 2)
 Label: (3000,)
@@ -11,6 +11,7 @@ SeqDataset Size 100 Sub Size [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 
 [Test][0] Accuracy: total average 50.5, test average 50.0, in each domain [55. 53. 53. 54. 54. 47. 51. 43. 52. 56. 49. 56. 44. 45. 57. 40. 53. 55.
  56. 50. 44. 49. 52. 49. 59. 50. 43. 54. 45. 47.]
 The domain for each batch is 30.
+The number of the selected samples is 16.
 epoch 0, loss: {'D': 3.401197870572408, 'E_pred': 0.13858036696910858, 'Q_u_x': 1.2552875735612664e-05, 'Q_z_x_u': 6.402167969099537e-07, 'P_z_x_u': -256.0, 'U_beta_R': 5.054418961207072, 'U_concentrate': 6.23011573155721, 'R': 2.0026763876279197, 'P_beta_alpha': 2.003397067387899}, lambda gan: 0.2
 epoch 9, loss: {'D': 3.401197830835978, 'E_pred': 0.13857107857863107, 'Q_u_x': 0.003712501454477509, 'Q_z_x_u': 0.0009314015236062309, 'P_z_x_u': -256.0009256998698, 'U_beta_R': 4.786623636881511, 'U_concentrate': 6.1421217918396, 'R': 1.998738447825114, 'P_beta_alpha': 1.9873401522636414}, lambda gan: 0.2
 epoch 19, loss: {'D': 3.40119735399882, 'E_pred': 0.13854591051737467, 'Q_u_x': 0.19270669668912888, 'Q_z_x_u': 0.0030324203350270786, 'P_z_x_u': -256.0030466715495, 'U_beta_R': 5.551148335138957, 'U_concentrate': 6.142299731572469, 'R': 1.9972917238871257, 'P_beta_alpha': 1.9258886575698853}, lambda gan: 0.2

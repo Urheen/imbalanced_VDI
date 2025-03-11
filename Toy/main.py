@@ -130,19 +130,16 @@ if opt.online:
         dataset=dataset,
         batch_size=opt.batch_size,
         k=opt.k,
-        shuffle=True
-    )
-    test_loader = KSubsetDataLoader(
-        dataset=dataset,
-        batch_size=opt.batch_size,
-        k=opt.num_domain
+        shuffle=True,
+        drop_last=True
     )
     # test_loader = dataloader
 else:
     dataset = SeqToyDataset(datasets, size=len(datasets[0]))  # mix sub dataset to a large one
-    dataloader = DataLoader(dataset=dataset, batch_size=opt.batch_size, shuffle=True)
-    test_loader = DataLoader(dataset=dataset, batch_size=opt.batch_size)
+    dataloader = DataLoader(dataset=dataset, batch_size=opt.batch_size, shuffle=True, drop_last=True)
 
+test_dataset = SeqToyDataset(datasets, size=len(datasets[0]))  # mix sub dataset to a large one
+test_loader = DataLoader(dataset=test_dataset, batch_size=opt.batch_size)
 
 # TODO: this is the test to check whether the online environment is correctly simulated.
 # for epoch in range(3):
@@ -164,11 +161,14 @@ for epoch in range(opt.num_epoch):
             # random.seed(13+epoch)
             # test_dataloader.sampler._reset()
         model.test(epoch, test_loader)
+        if opt.online:
+            print(f"The domain for each batch is {opt.k}.")
+            if opt.use_selector:
+                print(f"The number of the selected samples is {opt.num_filtersamples}.")
 
     verbose = epoch >= 79
 
-    # if opt.online:
-    #     dataloader.sampler._reset()
+    
     model.learn(epoch, dataloader)
 
     if (epoch + 1) % opt.save_interval == 0 or (epoch + 1) == opt.num_epoch:
