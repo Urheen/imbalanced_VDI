@@ -5,6 +5,7 @@ import pickle, random
 from torch.utils.data import Sampler
 import math
 from collections import deque
+import itertools
 
 def read_pickle(name):
     with open(name, 'rb') as f:
@@ -43,6 +44,8 @@ class SeqToyDataset(Dataset):
     def __init__(self, datasets, size=3 * 200):
         self.datasets = datasets
         self.size = size
+        print(self.size)
+        # exit(0)
         print('SeqDataset Size {} Sub Size {}'.format(
             size, [len(ds) for ds in datasets]))
 
@@ -51,6 +54,133 @@ class SeqToyDataset(Dataset):
     
     def __getitem__(self, i):
         return [ds[i] for ds in self.datasets]
+    
+class ZiyanDataset(Dataset):
+    def __init__(self, datasets):
+        """
+        datasets: List of sub-datasets, each a list of tensors.
+        """
+        self.datasets = datasets
+        self.num_subdatasets = len(datasets)
+        self.num_samples = len(datasets[0])  # Assuming all sub-datasets have the same length
+
+    def __len__(self):
+        return self.num_samples
+
+    def __getitem__(self, index):
+        # Index format: (subdataset_id, sample_id)
+        # print(index)
+        if isinstance(index, (tuple, list)):
+            subdataset_id, sample_id = index
+            return self.datasets[subdataset_id][sample_id]
+
+class ZiyanDatasetSampler(Sampler):
+    def __init__(self, datasets, batch_size, K, shuffle=False, drop_last=False, allow_padding=False):
+        """
+        datasets: List of sub-datasets.
+        batch_size: Number of samples per batch.
+        K: Number of sub-datasets per batch.
+        shuffle: Whether to shuffle data.
+        drop_last: Whether to drop the last incomplete batch.
+        allow_padding: Whether to pad when samples are missing.
+        """
+        self.datasets = datasets
+        self.batch_size = batch_size
+        self.K = K
+        self.num_domains = len(datasets)  # Number of sub-datasets
+        self.num_samples = len(datasets[0])  # Assuming all sub-datasets have the same length
+        self.shuffle = shuffle
+        self.drop_last = drop_last
+        self.allow_padding = allow_padding
+        self.batches = []
+        self.reset_order()
+
+    def reset_order(self):
+        """
+        Reset the sampling order for a new epoch.
+        """
+        self.batches = []
+        # index_order = list(range(self.num_samples))  # Sample indices
+        # if self.shuffle:
+        #     random.shuffle(index_order)
+
+        # index_iter = iter(index_order)
+        if self.shuffle:
+            index_order = torch.randperm(self.num_samples).tolist()
+            # index_order = list(range(self.num_samples))
+            # random.shuffle(index_order)
+        else:
+            index_order = list(range(self.num_samples))
+        index_iter = iter(index_order)
+        batch = list(itertools.islice(index_iter, self.batch_size))
+        # batch.sort()
+
+        while batch:
+            # Shuffle sub-dataset order for each batch
+            # domain_order = list(range(self.N))
+            # if self.shuffle:
+            #     random.shuffle(domain_order)
+            # domain_iter = iter(domain_order)
+            
+            if self.shuffle:
+                domain_order = torch.randperm(self.num_domains).tolist()
+                # domain_order = list(range(self.num_domains))
+                # random.shuffle(domain_order)
+            else:
+                domain_order = list(range(self.num_domains))
+
+            domain_iter = iter(domain_order)
+            domain_groups = list(itertools.islice(domain_iter, self.K))
+            domain_groups.sort()
+
+            while domain_groups:
+                # Construct batch tuples: (subdataset_id, sample_id)
+                this_batches = list(itertools.product(domain_groups, batch))
+
+                if len(domain_groups) < self.K and self.allow_padding:
+                    # Fill missing sub-dataset slots with last seen dataset
+                    while len(domain_groups) < self.K:
+                        domain_groups.append(domain_groups[-1])
+
+                self.batches.append(this_batches)
+                domain_groups = list(itertools.islice(domain_iter, self.K))
+                domain_groups.sort()
+
+            batch = list(itertools.islice(index_iter, self.batch_size))
+            # batch.sort()
+
+    def __iter__(self):
+        for batch in self.batches:
+            yield batch
+
+    def __len__(self):
+        return len(self.batches)
+    
+def ziyan_collate(batch_list):
+    data, label, domain = [], [], []
+    # print(batch_list[0])
+    for (x,y,d) in batch_list:
+        # print(x,y,d)
+        data.append(torch.from_numpy(x))
+        label.append(torch.LongTensor([y]))
+        domain.append(torch.LongTensor([d]))
+        # print(data[-1], label[-1], domain[-1])
+    data = torch.stack(data, dim=0)  # shape [batch_size*K, D]
+    label = torch.stack(label, dim=0) 
+    domain = torch.stack(domain, dim=0) 
+    num_domain_per_batch = torch.unique(domain).flatten().shape[0]
+    data_dim = data.shape[-1]
+
+    data = data.view(num_domain_per_batch, -1, data_dim)  # shape [K, batch_size, D]
+    label = label.view(num_domain_per_batch, -1)
+    domain = domain.view(num_domain_per_batch, -1)
+    # print(data.shape, label.shape, domain.shape)
+    # print(domain)
+    # batch_tensor = batch_tensor.permute(1, 0, 2).contiguous()  # shape [batch_size, K, D]
+    outputs = []
+    for k in range(num_domain_per_batch):
+        outputs.append((data[k], label[k], domain[k]))
+    return outputs
     
 
 class ziyanSeqToyDataset(Dataset):

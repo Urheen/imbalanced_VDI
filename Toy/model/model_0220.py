@@ -248,31 +248,14 @@ class BaseModel(nn.Module):
         #   domain_seq: Number of domain x Batch size x domain dim (1)
         #   idx_seq: Number of domain x Batch size x 1 (the order in the whole dataset)
         #   y_value_seq: Number of domain x Batch size x Predict Data dim
+
         x_seq, y_seq, domain_seq = [d[0][None, :, :] for d in data
-                                        ], [d[1][None, :] for d in data
-                                            ], [d[2][None, :] for d in data]
-
-        self.x_seq_tmp = torch.cat(x_seq, 0).to(self.device)
-        self.y_seq_tmp = torch.cat(y_seq, 0).to(self.device)
-        self.domain_seq_tmp = torch.cat(domain_seq, 0).to(self.device)
-        self.domain_sel = torch.unique(self.domain_seq_tmp).tolist()
-
-        self.x_seq = torch.zeros((self.num_domain, *self.x_seq_tmp.shape[1:])).to(self.device)
-        self.y_seq = torch.zeros((self.num_domain, *self.y_seq_tmp.shape[1:])).to(device=self.device, dtype=torch.long)
-        self.domain_seq = torch.zeros((self.num_domain, *self.domain_seq_tmp.shape[1:])).to(device=self.device, dtype=torch.long)
-        self.domain_sel_broadcast = torch.zeros((self.num_domain, self.x_seq_tmp.shape[1])).to(self.device)
-        self.domain_sel_broadcast[self.domain_sel, :] = 1.0
-        self.domain_sel_broadcast.requires_grad = False
-
-        for idx, elem in enumerate(self.domain_sel):
-            self.x_seq[elem, :, :] = self.x_seq_tmp[idx]
-            self.y_seq[elem] = self.y_seq_tmp[idx]
-            self.domain_seq[elem] = self.domain_seq_tmp[idx]
-
-        self.x_seq.requires_grad = True
-
+                                    ], [d[1][None, :] for d in data
+                                        ], [d[2][None, :] for d in data]
+        self.x_seq = torch.cat(x_seq, 0).to(self.device)
+        self.y_seq = torch.cat(y_seq, 0).to(self.device)
+        self.domain_seq = torch.cat(domain_seq, 0).to(self.device)
         self.tmp_batch_size = self.x_seq.shape[1]
-
 
     def __train_forward__(self):
         self.u_seq, self.u_mu_seq, self.u_log_var_seq = self.netU(self.x_seq)

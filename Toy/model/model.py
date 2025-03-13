@@ -107,13 +107,13 @@ class BaseModel(nn.Module):
 
         if self.epoch == 0:
             self.reset_buffer()
-            flag = 0
-            if self.opt.use_selector:
-                while len(self.filter_sel) != self.num_domain:
-                    for data in dataloader:
-                        pass
-                    flag += 1
-                    break
+            # flag = 0
+            # if self.opt.use_selector:
+            #     while len(self.filter_sel) != self.num_domain:
+            #         for data in dataloader:
+            #             pass
+            #         flag += 1
+            #         break
 
         count = 0
         for data in dataloader:
@@ -282,13 +282,11 @@ class BaseModel(nn.Module):
         #   domain_seq: Number of domain x Batch size x domain dim (1)
         #   idx_seq: Number of domain x Batch size x 1 (the order in the whole dataset)
         #   y_value_seq: Number of domain x Batch size x Predict Data dim
-        if flag:
-            return
+
         x_seq, y_seq, domain_seq = [d[0][None, :, :] for d in data
                                         ], [d[1][None, :] for d in data
                                             ], [d[2][None, :] for d in data]
-        if flag:
-            return
+
         self.x_seq_tmp = torch.cat(x_seq, 0).to(self.device)
         self.y_seq_tmp = torch.cat(y_seq, 0).to(self.device)
         self.domain_seq_tmp = torch.cat(domain_seq, 0).to(self.device)
@@ -330,13 +328,6 @@ class BaseModel(nn.Module):
         self.tmp_total_domain_sel = list(set(list(self.filter_sel) + self.domain_sel))
         self.tmp_num_domain = len(self.tmp_total_domain_sel)
         self.tmp_total_domain_sel = torch.LongTensor(self.tmp_total_domain_sel).to(self.device)
-        # print(self.tmp_batch_size, self.tmp_total_domain_sel,  self.tmp_num_domain, self.tmp_total_domain_sel)
-        # if self.epoch >= 1:
-        #     print(self.tmp_num_domain)
-        #     print(self.domain_sel_mask)
-        # print('&&&&&&&&&&&&&&&&&&&&', self.tmp_num_domain, self.filter_sel)
-        # print(self.domain_sel)  # current selected domain
-        # print(self.x_seq.shape, self.y_seq.shape, self.domain_seq.shape, self.tmp_batch_size, self.domain_sel, self.domain_sel_mask)
 
     def __filter_input__(self, flag=False):
         from sklearn.neighbors import NearestNeighbors
@@ -514,17 +505,12 @@ class BaseModel(nn.Module):
                 torch.exp(self.p_z_log_var_seq))
         loss_p_z_x_u = (loss_p_z_x_u.sum(1) * flat(self.domain_sel_mask)).mean()
 
-        # print(f"the shape for y_seq:{self.y_seq.shape}, domain mask {self.domain_mask.shape}")
-        # print((self.domain_mask == 1).to(self.y_seq.device))
-        # print(torch.isin(torch.arange(self.domain_mask.shape[0]).to(self.y_seq.device), self.domain_sel))
-        mask_comb = (self.domain_mask == 1).unsqueeze(-1) & (self.domain_sel_mask == 1)
-        # print(f"{self.y_seq[mask1 & mask2].shape}")
-        # exit(0)
+
+        domain_valid = self.domain_sel_mask.sum(dim=1).bool()
+        mask_comb = (self.domain_mask == 1) & domain_valid
         # E_q[log p(y|z)]
-        # y_seq_source = self.y_seq[self.domain_mask == 1]
-        # f_seq_source = self.f_seq[self.domain_mask == 1]
-        y_seq_source = self.y_seq * mask_comb
-        f_seq_source = self.f_seq * mask_comb.unsqueeze(-1)
+        y_seq_source = self.y_seq[mask_comb]
+        f_seq_source = self.f_seq[mask_comb]
 
         if y_seq_source.shape[0] == 0:
             loss_p_y_z = torch.tensor([0]).to(y_seq_source.device)
@@ -532,17 +518,20 @@ class BaseModel(nn.Module):
             loss_p_y_z = -F.nll_loss(
                 flat(f_seq_source).squeeze(), flat(y_seq_source))
         
+        # y_seq_source = self.y_seq[self.domain_mask == 1]
+        # f_seq_source = self.f_seq[self.domain_mask == 1]
+        # loss_p_y_z = -F.nll_loss(
+        #     flat(f_seq_source).squeeze(), flat(y_seq_source))
+        
         # E_q[log p(\beta|\alpha)]
         # assuming alpha mean = 0
-        # print(self.beta_log_var_seq.shape)  # num_domain, 2
-        var_beta_mask = self.domain_sel_mask.sum(dim=1).bool()
         # print(var_beta_mask.sum(), var_beta_mask.shape[0])
         # if var_beta_mask.sum() != self.opt.k: 
         #     print(var_beta_mask)
         #     exit(0)
         var_beta = torch.exp(self.beta_log_var_seq) 
         # To reproduce the exact result of our experiment, use the following line to replace the loss_beta_alpha:
-        loss_beta_alpha = -((var_beta**2).sum(dim=1) * var_beta_mask).mean()
+        loss_beta_alpha = -((var_beta**2).sum(dim=1) * domain_valid).mean()
         # Actually the previous line is wrong because based on our formula, it should be var_beta, not var_beta**2.
         # However, all our parameter tunning is based on the previous one. Thus, to ensure that you can reproduce our results, please use the previous line.
         # The correct line should be: 

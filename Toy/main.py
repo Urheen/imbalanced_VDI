@@ -55,69 +55,37 @@ data_pkl['data'] = (data - data_mean) / data_std  # normalize the raw data
 datasets = [ToyDataset(data_pkl, i, opt)
             for i in range(opt.num_domain)]  # sub dataset for each domain
 
-# random.seed(13)
-# dataset = ziyanSeqToyDataset(datasets, size=len(datasets[0]))  # mix sub dataset to a large one
-# dataloader_te = KSubsetDataLoader(
-#     dataset=dataset,
-#     batch_size=opt.batch_size,
-#     k=opt.k,
-#     shuffle=True,
-#     drop_last=True
-# )
+# multi_dataset = ZiyanDataset(datasets)
+# sampler = ZiyanDatasetSampler(datasets, batch_size=opt.batch_size, K=opt.k, shuffle=False)
+# dataloader = DataLoader(multi_dataset, batch_sampler=sampler, collate_fn=ziyan_collate)
 
-# dataloader = ziyanKSubsetDataLoader(
-#     dataset=dataset,
-#     batch_size=opt.batch_size,
-#     k=opt.k,
-#     shuffle=True,
-#     drop_last=True
-# )
+# dataset_off = SeqToyDataset(datasets, size=len(datasets[0]))  # mix sub dataset to a large one
+# dataloader_off = DataLoader(dataset=dataset_off, batch_size=opt.batch_size, shuffle=False, drop_last=False)
 
-# for epoch in range(2):
-#     for elem in dataloader_ori:
-#         for d in elem:
-#             # print('ori', epoch, len(elem), len(d), d[0].shape, d[1].shape, d[2].shape, d[2])
-#             break
+# for epoch in range(20):  # Run for two epochs
+#     print(f"Epoch {epoch}")
+#     for batch_idx, elem in enumerate(dataloader):
+#         x_seq, y_seq, domain_seq = [d[0][None, :, :] for d in elem
+#                                         ], [d[1][None, :] for d in elem
+#                                             ], [d[2][None, :] for d in elem]
+#         x_seq_tmp = torch.cat(x_seq, 0)
+#         y_seq_tmp = torch.cat(y_seq, 0)
+#         domain_seq_tmp = torch.cat(domain_seq, 0)
+#         print('on', x_seq_tmp.shape, y_seq_tmp.shape, domain_seq_tmp.shape,
+#               x_seq_tmp.view(30,-1).mean(dim=1), domain_seq_tmp)
+#         break
 
-#     for elem in dataloader:
-#         for d in elem:
-#             # print('ziyan', epoch, len(elem), len(d), d[0].shape, d[1].shape, d[2].shape, d[2])
-#             break
-
-#     for elem in dataloader_te:
-#         for d in elem:
-#             # print('deepseek', epoch, len(elem), len(d), d[0].shape, d[1].shape, d[2].shape, d[2])
-#             break
-#         # break
-# print('==============================')
-# for epoch in range(2):
-
-#     for elem in dataloader:
-#         for d in elem:
-#             print('ziyan', epoch, len(elem), len(d), d[0].shape, d[1].shape, d[2].shape)
-#             break
-
-#     for elem in dataloader_te:
-#         for d in elem:
-#             print('deepseek', epoch, len(elem), len(d), d[0].shape, d[1].shape, d[2].shape)
-#             break
-#         # break
-# exit(0)
-# for epoch in range(2):
-
-#     # for elem in dataloader:
-#     #     for d in elem:
-#     #         print('off', epoch, len(elem), len(d), d[0].shape, d[1].shape, d[2].shape)
-#     #         break
-
-#     for elem in dataloader_te:
-#         for d in elem:
-#             print('on', epoch, len(elem), len(d), d[0].shape, d[1].shape, d[2].shape)
-#             break
+#     for batch_idx, elem in enumerate(dataloader_off):
+#         x_seq, y_seq, domain_seq = [d[0][None, :, :] for d in elem
+#                                         ], [d[1][None, :] for d in elem
+#                                             ], [d[2][None, :] for d in elem]
+#         x_seq_tmp = torch.cat(x_seq, 0)
+#         y_seq_tmp = torch.cat(y_seq, 0)
+#         domain_seq_tmp = torch.cat(domain_seq, 0)
+#         print('off', x_seq_tmp.shape, y_seq_tmp.shape, domain_seq_tmp.shape,
+#               x_seq_tmp.view(30,-1).mean(dim=1), domain_seq_tmp)
 #         break
 # exit(0)
-
-    
 
 if opt.online:
     # dataset = OnlineSeqToyDataset(datasets, size=len(datasets[0]))  # mix sub dataset to a large one
@@ -125,59 +93,42 @@ if opt.online:
     # test_dataloader = DataLoader(dataset=dataset, sampler=test_sampler)
     # sampler = OnlineBatchSampler(len(datasets), opt.k, opt.batch_size, size=len(datasets[0]))
     # dataloader = DataLoader(dataset=dataset, sampler=sampler)
-    dataset = ziyanSeqToyDataset(datasets, size=len(datasets[0]))  # mix sub dataset to a large one
-    dataloader = KSubsetDataLoader(
-        dataset=dataset,
-        batch_size=opt.batch_size,
-        k=opt.k,
-        shuffle=True,
-        drop_last=True
-    )
-    # test_loader = dataloader
+    # dataset = ziyanSeqToyDataset(datasets, size=len(datasets[0]))  # mix sub dataset to a large one
+    # dataloader = KSubsetDataLoader(
+    #     dataset=dataset,
+    #     batch_size=opt.batch_size,
+    #     k=opt.k,
+    #     shuffle=True,
+    #     drop_last=True
+    # )
+    multi_dataset = ZiyanDataset(datasets)
+    sampler = ZiyanDatasetSampler(datasets, batch_size=opt.batch_size, K=opt.k, shuffle=True)
+    dataloader = DataLoader(multi_dataset, batch_sampler=sampler, collate_fn=ziyan_collate)
+
+    # dataset = SeqToyDataset(datasets, size=len(datasets[0]))  # mix sub dataset to a large one
+    # dataloader = DataLoader(dataset=dataset, batch_size=opt.batch_size, shuffle=True, drop_last=False)
 else:
     dataset = SeqToyDataset(datasets, size=len(datasets[0]))  # mix sub dataset to a large one
-    dataloader = DataLoader(dataset=dataset, batch_size=opt.batch_size, shuffle=True, drop_last=True)
+    dataloader = DataLoader(dataset=dataset, batch_size=opt.batch_size, shuffle=True, drop_last=False)
 
 test_dataset = SeqToyDataset(datasets, size=len(datasets[0]))  # mix sub dataset to a large one
 test_loader = DataLoader(dataset=test_dataset, batch_size=opt.batch_size)
 
-# TODO: this is the test to check whether the online environment is correctly simulated.
-# for epoch in range(3):
-#     print()
-#     if opt.online:
-#         random.seed(13+epoch)
-#         sampler = OnlineBatchSampler(len(datasets), opt.k, opt.batch_size, size=len(datasets[0]))
-#         dataloader = DataLoader(dataset=dataset, sampler=sampler)
-#     for data in dataloader:
-#         print([torch.unique(d[2]) for d in data])
-
-
-
-# exit(0)
 # train
 for epoch in range(opt.num_epoch):
     if epoch == 0:
-        # if opt.online:
-            # random.seed(13+epoch)
-            # test_dataloader.sampler._reset()
         model.test(epoch, test_loader)
         if opt.online:
             print(f"The domain for each batch is {opt.k}.")
             if opt.use_selector:
                 print(f"The number of the selected samples is {opt.num_filtersamples}.")
 
-    verbose = epoch >= 79
-
-    
     model.learn(epoch, dataloader)
+    if opt.online:
+        dataloader.batch_sampler.reset_order()
 
     if (epoch + 1) % opt.save_interval == 0 or (epoch + 1) == opt.num_epoch:
         model.save()
     if (epoch + 1) % opt.test_interval == 0 or (epoch + 1) == opt.num_epoch:
-        # if opt.online:
-        #     random.seed(13+epoch)
-        #     sampler = OnlineBatchSampler(len(datasets), opt.num_domain, opt.batch_size, size=len(datasets[0]))
-        #     dataloader = DataLoader(dataset=dataset, sampler=sampler)
-        # if opt.online:
-        #     test_dataloader.sampler._reset()
         model.test(epoch, test_loader)
+print(f"{opt.online}")

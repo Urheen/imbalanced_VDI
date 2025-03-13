@@ -3,7 +3,7 @@ import itertools
 import torch
 from torch.utils.data import Dataset, Sampler, DataLoader
 
-class MultiDataset(Dataset):
+class ZiyanDataset(Dataset):
     def __init__(self, datasets):
         """
         datasets: List of sub-datasets, each a list of tensors.
@@ -17,12 +17,12 @@ class MultiDataset(Dataset):
 
     def __getitem__(self, index):
         # Index format: (subdataset_id, sample_id)
-        print(index)
+        # print(index)
         if isinstance(index, (tuple, list)):
             subdataset_id, sample_id = index
             return self.datasets[subdataset_id][sample_id]
 
-class MultiDatasetSampler(Sampler):
+class ZiyanDatasetSampler(Sampler):
     def __init__(self, datasets, batch_size, K, shuffle=True, drop_last=False, allow_padding=True):
         """
         datasets: List of sub-datasets.
@@ -98,7 +98,7 @@ class MultiDatasetSampler(Sampler):
         return len(self.batches)
     
 
-def multi_collate(batch_list):
+def ziyan_collate(batch_list):
     x, y = [], []
     print(batch_list[0])
     for elem in batch_list:
@@ -106,10 +106,13 @@ def multi_collate(batch_list):
         y.append(elem[1])
     batch_tensor = torch.stack(x, dim=0)  # shape [batch_size*K, D]
     batch_label = torch.stack(y, dim=0) 
-    print(batch_tensor.shape, batch_label)
-    batch_tensor = batch_tensor.view(K, -1, D)  # shape [K, batch_size, D]
-    batch_label = batch_label.view(K, -1, 1)
-    print(batch_label)
+    # print(batch_tensor.shape, batch_label)
+    this_doamin_num = torch.unique(batch_label).flatten().shape[0]
+    data_dim = batch_tensor.shape[-1]
+    # assert this_doamin_num == K
+    batch_tensor = batch_tensor.view(this_doamin_num, -1, data_dim)  # shape [K, batch_size, D]
+    batch_label = batch_label.view(this_doamin_num, -1, 1)
+    # print(batch_label)
     # batch_tensor = batch_tensor.permute(1, 0, 2).contiguous()  # shape [batch_size, K, D]
     return batch_tensor, batch_label
 
@@ -127,17 +130,17 @@ for i in range(N):
     datasets.append(dataset)
 
 # Create dataset and sampler
-multi_dataset = MultiDataset(datasets)
-sampler = MultiDatasetSampler(datasets, batch_size=batch_size, K=K, shuffle=True, allow_padding=True)
+multi_dataset = ZiyanDataset(datasets)
+sampler = ZiyanDatasetSampler(datasets, batch_size=batch_size, K=K, shuffle=True, allow_padding=True)
 
 # Create DataLoader
-dataloader = DataLoader(multi_dataset, batch_sampler=sampler, collate_fn=multi_collate)
+dataloader = DataLoader(multi_dataset, batch_sampler=sampler, collate_fn=ziyan_collate)
 
 # Verification
 print("### Verification: Batch shapes and sub-dataset IDs ###")
 seen_subdatasets = [set() for _ in range(N)]
 
-for epoch in range(1):  # Run for two epochs
+for epoch in range(2):  # Run for two epochs
     print(f"Epoch {epoch}")
     for batch_idx, (batch_data, batch_labels) in enumerate(dataloader):
         sub_ids_in_batch = set()
@@ -148,6 +151,7 @@ for epoch in range(1):  # Run for two epochs
             seen_subdatasets[sub_id].add(samp_id)
 
         print(f" Batch {batch_idx}: batch_data.shape = {tuple(batch_data.shape)}, sub-dataset IDs = {sorted(list(sub_ids_in_batch))}")
+    dataloader.batch_sampler.reset_order()
 
 print("\n### Coverage Check ###")
 for sub_id in range(N):
