@@ -69,10 +69,8 @@ opt.online = True
 if opt.online:
     opt.k = opt.num_domain
     opt.use_selector = False
-    opt.n_neighbors = opt.batch_size - 1
-    opt.num_filtersamples = opt.batch_size
+    opt.num_filtersamples = int(opt.batch_size * 0.1 )
 else:
     opt.k = opt.num_domain
     opt.use_selector = False
-    opt.n_neighbors = 0
     opt.num_filtersamples = 0

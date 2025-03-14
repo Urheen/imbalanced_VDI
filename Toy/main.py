@@ -56,13 +56,13 @@ datasets = [ToyDataset(data_pkl, i, opt)
             for i in range(opt.num_domain)]  # sub dataset for each domain
 
 # multi_dataset = ZiyanDataset(datasets)
-# sampler = ZiyanDatasetSampler(datasets, batch_size=opt.batch_size, K=opt.k, shuffle=False)
+# sampler = ZiyanDatasetSampler(datasets, batch_size=opt.batch_size, K=opt.k, shuffle=True, drop_last=True)
 # dataloader = DataLoader(multi_dataset, batch_sampler=sampler, collate_fn=ziyan_collate)
 
 # dataset_off = SeqToyDataset(datasets, size=len(datasets[0]))  # mix sub dataset to a large one
-# dataloader_off = DataLoader(dataset=dataset_off, batch_size=opt.batch_size, shuffle=False, drop_last=False)
-
-# for epoch in range(20):  # Run for two epochs
+# dataloader_off = DataLoader(dataset=dataset_off, batch_size=32, shuffle=False, drop_last=False)
+# print('hey')
+# for epoch in range(5):  # Run for two epochs
 #     print(f"Epoch {epoch}")
 #     for batch_idx, elem in enumerate(dataloader):
 #         x_seq, y_seq, domain_seq = [d[0][None, :, :] for d in elem
@@ -71,20 +71,18 @@ datasets = [ToyDataset(data_pkl, i, opt)
 #         x_seq_tmp = torch.cat(x_seq, 0)
 #         y_seq_tmp = torch.cat(y_seq, 0)
 #         domain_seq_tmp = torch.cat(domain_seq, 0)
-#         print('on', x_seq_tmp.shape, y_seq_tmp.shape, domain_seq_tmp.shape,
-#               x_seq_tmp.view(30,-1).mean(dim=1), domain_seq_tmp)
-#         break
-
-#     for batch_idx, elem in enumerate(dataloader_off):
-#         x_seq, y_seq, domain_seq = [d[0][None, :, :] for d in elem
-#                                         ], [d[1][None, :] for d in elem
-#                                             ], [d[2][None, :] for d in elem]
-#         x_seq_tmp = torch.cat(x_seq, 0)
-#         y_seq_tmp = torch.cat(y_seq, 0)
-#         domain_seq_tmp = torch.cat(domain_seq, 0)
-#         print('off', x_seq_tmp.shape, y_seq_tmp.shape, domain_seq_tmp.shape,
-#               x_seq_tmp.view(30,-1).mean(dim=1), domain_seq_tmp)
-#         break
+#         print('on', x_seq_tmp.shape, y_seq_tmp.shape, domain_seq_tmp.shape, domain_seq_tmp[:,0].flatten())
+#     dataloader.batch_sampler.reset_order()
+# exit(0)
+#     # for batch_idx, elem in enumerate(dataloader_off):
+#     #     x_seq, y_seq, domain_seq = [d[0][None, :, :] for d in elem
+#     #                                     ], [d[1][None, :] for d in elem
+#     #                                         ], [d[2][None, :] for d in elem]
+#     #     x_seq_tmp = torch.cat(x_seq, 0)
+#     #     y_seq_tmp = torch.cat(y_seq, 0)
+#     #     domain_seq_tmp = torch.cat(domain_seq, 0)
+#     #     print('off', x_seq_tmp.shape, y_seq_tmp.shape, domain_seq_tmp.shape, domain_seq_tmp)
+#     #     break
 # exit(0)
 
 if opt.online:
@@ -106,10 +104,10 @@ if opt.online:
     dataloader = DataLoader(multi_dataset, batch_sampler=sampler, collate_fn=ziyan_collate)
 
     # dataset = SeqToyDataset(datasets, size=len(datasets[0]))  # mix sub dataset to a large one
-    # dataloader = DataLoader(dataset=dataset, batch_size=opt.batch_size, shuffle=True, drop_last=False)
+    # dataloader = DataLoader(dataset=dataset, batch_size=opt.batch_size, shuffle=True)
 else:
     dataset = SeqToyDataset(datasets, size=len(datasets[0]))  # mix sub dataset to a large one
-    dataloader = DataLoader(dataset=dataset, batch_size=opt.batch_size, shuffle=True, drop_last=False)
+    dataloader = DataLoader(dataset=dataset, batch_size=opt.batch_size, shuffle=True)
 
 test_dataset = SeqToyDataset(datasets, size=len(datasets[0]))  # mix sub dataset to a large one
 test_loader = DataLoader(dataset=test_dataset, batch_size=opt.batch_size)

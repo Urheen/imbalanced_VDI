@@ -129,7 +129,8 @@ class BaseModel(nn.Module):
             # self.new_u.append(self.u_seq)
 
             if self.opt.use_selector:
-                self.__filter_input__()
+                if self.tmp_batch_size == self.opt.batch_size:
+                    self.__filter_input__()
 
         # self.new_u = self.my_cat(self.new_u)
         # self.use_beta_seq = self.generate_beta(self.new_u)
