@@ -137,11 +137,6 @@ class ZiyanDatasetSampler(Sampler):
                 # Construct batch tuples: (subdataset_id, sample_id)
                 this_batches = list(itertools.product(domain_groups, batch))
 
-                # if len(domain_groups) < self.K and self.allow_padding:
-                #     # Fill missing sub-dataset slots with last seen dataset
-                #     while len(domain_groups) < self.K:
-                #         domain_groups.append(domain_groups[-1])
-
                 self.batches.append(this_batches)
                 domain_groups = list(itertools.islice(domain_iter, self.K))
                 domain_groups.sort()
