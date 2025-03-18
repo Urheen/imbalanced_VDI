@@ -34,7 +34,7 @@ opt.final_lr = 1e-8
 opt.warmup_steps = 40
 
 opt.seed = 2333
-opt.num_epoch = 800
+opt.num_epoch = 700
 opt.batch_size = 16
 
 opt.use_visdom = False  # True
@@ -67,9 +67,9 @@ opt.online = True
 # opt.online = False
 
 if opt.online:
-    opt.k = opt.num_domain
-    opt.use_selector = False
-    opt.num_filtersamples = int(opt.batch_size * 0.1 )
+    opt.k = 10
+    opt.use_selector = True
+    opt.num_filtersamples = int(opt.batch_size * 0.1)
 else:
     opt.k = opt.num_domain
     opt.use_selector = False

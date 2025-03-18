@@ -337,23 +337,24 @@ class BaseModel(nn.Module):
         for this_domain in self.domain_sel:
             # if this_domain in self.filter_sel:
             #     continue  # if already select the sample
-            this_knn = NearestNeighbors(n_neighbors=self.opt.n_neighbors)
             this_domain_data = self.x_seq[this_domain].detach()
             this_domain_label = self.y_seq[this_domain]
             this_domain_domain = self.domain_seq[this_domain]
-            # print(this_domain, self.domain_sel, self.filter_sel, torch.unique(self.domain_seq), self.domain_seq.shape)
-            # print(self.x_seq[this_domain].shape, self.y_seq[this_domain].shape, self.domain_seq[this_domain].shape)
-            this_knn.fit(this_domain_data.cpu().numpy())
-            distances, _ = this_knn.kneighbors(this_domain_data.cpu().numpy())
+            # # print(this_domain, self.domain_sel, self.filter_sel, torch.unique(self.domain_seq), self.domain_seq.shape)
+            # # print(self.x_seq[this_domain].shape, self.y_seq[this_domain].shape, self.domain_seq[this_domain].shape)
+            # this_knn = NearestNeighbors(n_neighbors=self.tmp_batch_size-1)
+            # this_knn.fit(this_domain_data.cpu().numpy())
+            # distances, _ = this_knn.kneighbors(this_domain_data.cpu().numpy())
 
-            avg_distances = distances[:, 1:].mean(axis=1)  # 排除自身距离
-            density = 1 / (avg_distances + 1e-8)  # 防止除零
+            # avg_distances = distances[:, 1:].mean(axis=1)  
+            # density = 1 / (avg_distances + 1e-8)  
 
-            rng = np.random.default_rng(seed=2766249141)  # 创建独立生成器
+            rng = np.random.default_rng(seed=2766249141)  
             random_values = rng.random(self.tmp_batch_size)        # 不影响全局 np.random
 
             # random_values = np.random.rand(self.tmp_batch_size)
-            keys = random_values ** (1 / density)  # Efraimidis-Spirakis算法
+            density = np.ones_like(random_values)
+            keys = random_values ** (1 / density)  # Weighted Random Sampling
         
             selected_indices = np.argsort(-keys)[:self.opt.num_filtersamples]
 

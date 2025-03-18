@@ -142,6 +142,21 @@ class ZiyanDatasetSampler(Sampler):
                 domain_groups.sort()
 
             batch = list(itertools.islice(index_iter, self.batch_size))
+
+            if len(batch) == 0 or len(batch) == self.batch_size:
+                pass
+            else:
+                if self.drop_last:
+                    if len(batch) < self.batch_size:
+                        batch = list(itertools.islice(index_iter, self.batch_size))
+                else:
+                    flag = self.batch_size - len(batch)
+                    for elem in index_order:
+                        if elem not in batch:
+                            batch.append(elem)
+                            flag -= 1
+                            if flag == 0:
+                                break
             # batch.sort()
 
     def __iter__(self):
