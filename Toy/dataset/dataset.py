@@ -100,15 +100,8 @@ class ZiyanDatasetSampler(Sampler):
         Reset the sampling order for a new epoch.
         """
         self.batches = []
-        # index_order = list(range(self.num_samples))  # Sample indices
-        # if self.shuffle:
-        #     random.shuffle(index_order)
-
-        # index_iter = iter(index_order)
         if self.shuffle:
             index_order = torch.randperm(self.num_samples).tolist()
-            # index_order = list(range(self.num_samples))
-            # random.shuffle(index_order)
         else:
             index_order = list(range(self.num_samples))
         index_iter = iter(index_order)
@@ -116,16 +109,8 @@ class ZiyanDatasetSampler(Sampler):
         # batch.sort()
 
         while batch:
-            # Shuffle sub-dataset order for each batch
-            # domain_order = list(range(self.N))
-            # if self.shuffle:
-            #     random.shuffle(domain_order)
-            # domain_iter = iter(domain_order)
-            
             if self.shuffle:
                 domain_order = torch.randperm(self.num_domains).tolist()
-                # domain_order = list(range(self.num_domains))
-                # random.shuffle(domain_order)
             else:
                 domain_order = list(range(self.num_domains))
 
@@ -193,169 +178,150 @@ def ziyan_collate(batch_list):
     return outputs
     
 
-class ziyanSeqToyDataset(Dataset):
-    def __init__(self, datasets, size=3*200, k=None):
-        self.datasets = datasets
-        self.size = size
-        self.k = k if k is not None else len(datasets)
-        self._current_subset = None
+# class ziyanSeqToyDataset(Dataset):
+#     def __init__(self, datasets, size=3*200, k=None):
+#         self.datasets = datasets
+#         self.size = size
+#         self.k = k if k is not None else len(datasets)
+#         self._current_subset = None
         
-        # 验证所有子数据集长度一致
-        assert all(len(ds) == len(datasets[0]) for ds in datasets)
-        print(f'ziyanSeqToyDataset Size {size}, Sub Size {[len(ds) for ds in datasets]}')
+#         # 验证所有子数据集长度一致
+#         assert all(len(ds) == len(datasets[0]) for ds in datasets)
+#         print(f'ziyanSeqToyDataset Size {size}, Sub Size {[len(ds) for ds in datasets]}')
 
-    def set_current_subset(self, subset):
-        """设置当前batch使用的子数据集索引"""
-        self._current_subset = subset
+#     def set_current_subset(self, subset):
+#         """设置当前batch使用的子数据集索引"""
+#         self._current_subset = subset
 
-    def __len__(self):
-        return self.size
+#     def __len__(self):
+#         return self.size
 
-    def __getitem__(self, i):
-        if self._current_subset is None:
-            # 默认模式（k=10时的原始行为）
-            return [ds[i] for ds in self.datasets]
+#     def __getitem__(self, i):
+#         if self._current_subset is None:
+#             # 默认模式（k=10时的原始行为）
+#             return [ds[i] for ds in self.datasets]
         
-        # 使用当前设置的子数据集
-        return [self.datasets[idx][i] for idx in self._current_subset]
+#         # 使用当前设置的子数据集
+#         return [self.datasets[idx][i] for idx in self._current_subset]
 
-class KSubsetDataLoader:
-    def __init__(self, dataset, batch_size, k, shuffle=False, drop_last=False):
-        self.dataset = dataset
-        self.batch_size = batch_size
-        self.k = k
-        self.shuffle = shuffle
-        self.drop_last = drop_last
+# class KSubsetDataLoader:
+#     def __init__(self, dataset, batch_size, k, shuffle=False, drop_last=False):
+#         self.dataset = dataset
+#         self.batch_size = batch_size
+#         self.k = k
+#         self.shuffle = shuffle
+#         self.drop_last = drop_last
 
-        self.num_domains = len(dataset.datasets)
-        assert self.num_domains % k == 0, "Number of subsets must be divisible by k"
-        self.num_groups = self.num_domains // k
-        self.n = len(dataset.datasets[0])
+#         self.num_domains = len(dataset.datasets)
+#         assert self.num_domains % k == 0, "Number of subsets must be divisible by k"
+#         self.num_groups = self.num_domains // k
+#         self.n = len(dataset.datasets[0])
         
-        # Calculate number of batches per group
-        if drop_last:
-            self.batches_per_domain = self.n // batch_size
-        else:
-            self.batches_per_domain = (self.n + batch_size - 1) // batch_size
+#         # Calculate number of batches per group
+#         if drop_last:
+#             self.batches_per_domain = self.n // batch_size
+#         else:
+#             self.batches_per_domain = (self.n + batch_size - 1) // batch_size
         
-        self.num_batches = self.num_groups * self.batches_per_domain
+#         self.num_batches = self.num_groups * self.batches_per_domain
 
-    def __iter__(self):
-        m = len(self.dataset.datasets)
-        g = self.num_groups
-        k = self.k
-        n = self.n
-        batch_size = self.batch_size
-        # print(f"m is {m}, g is {g}, k is {k}, n is {n}, batchsize is {self.batch_size}")
-        # subset_indices = list(np.arange(m))
-        # check_dict = {i:0 for i in subset_indices}
-        # groups = []
-        # while len(subset_indices):
-        #     print(subset_indices, k, selected)
-        #     print(check_dict)
-        #     selected = random.sample(subset_indices, k)
-        #     groups.append(np.array(selected))
-        #     for elem in selected:
-        #         check_dict[elem] += 1
-        #         if check_dict[elem] == self.batches_per_domain:
-        #             subset_indices.remove(elem)
+#     def __iter__(self):
+#         m = len(self.dataset.datasets)
+#         g = self.num_groups
+#         k = self.k
+#         n = self.n
+#         batch_size = self.batch_size
 
-        groups = []
-        for _ in range(self.batches_per_domain):
-            subset_indices = np.arange(m)
-            if self.shuffle:
-                np.random.shuffle(subset_indices)
-            groups.extend([subset_indices[i*k : (i+1)*k] for i in range(g)])
-        if self.shuffle:
-            np.random.shuffle(groups)
-        # print('groups', groups)
-        # for elem in groups:
-        #     print(elem)
-        # print('end group')
-        # if self.shuffle:
-        #     np.random.shuffle(groups)
+#         groups = []
+#         for _ in range(self.batches_per_domain):
+#             subset_indices = np.arange(m)
+#             if self.shuffle:
+#                 np.random.shuffle(subset_indices)
+#             groups.extend([subset_indices[i*k : (i+1)*k] for i in range(g)])
+#         if self.shuffle:
+#             np.random.shuffle(groups)
         
-        all_batches = []
-        indices_order = np.arange(n)
-        if self.shuffle:
-            np.random.shuffle(indices_order)
-        indices = [indices_order for _ in range(m)]
+#         all_batches = []
+#         indices_order = np.arange(n)
+#         if self.shuffle:
+#             np.random.shuffle(indices_order)
+#         indices = [indices_order for _ in range(m)]
 
-        # if self.shuffle:
-        #     for elem in indices:
-        #         np.random.shuffle(elem)
-        for group in groups:
-            # Split into batches
-            batches = []
-            for j in group:
-                batch_indices = indices[j][:batch_size]
-                indices[j] = indices[j][batch_size:]
+#         # if self.shuffle:
+#         #     for elem in indices:
+#         #         np.random.shuffle(elem)
+#         for group in groups:
+#             # Split into batches
+#             batches = []
+#             for j in group:
+#                 batch_indices = indices[j][:batch_size]
+#                 indices[j] = indices[j][batch_size:]
                 
-                batches.append(batch_indices)
+#                 batches.append(batch_indices)
             
-            # Record group and batch indices
-            all_batches.append((group, batches))
-        # print('all batch', all_batches)
-        # for elem in all_batches:
-        #     print(elem)
-        # print('end all batch')
-        # print(f"before {len(all_batches)}, {all_batches}")
-        # print('ziyan', len(all_batches), len(all_batches[0][1]))
-        if self.shuffle:
-            np.random.shuffle(all_batches)
+#             # Record group and batch indices
+#             all_batches.append((group, batches))
+#         # print('all batch', all_batches)
+#         # for elem in all_batches:
+#         #     print(elem)
+#         # print('end all batch')
+#         # print(f"before {len(all_batches)}, {all_batches}")
+#         # print('ziyan', len(all_batches), len(all_batches[0][1]))
+#         if self.shuffle:
+#             np.random.shuffle(all_batches)
 
-        # print(f"after {len(all_batches)}, {all_batches}")
-        # exit(0)
-        for group, batch_indices in all_batches:
-            # Collect data for this batch
-            batch_data = []
-            group_argsorted = np.argsort(group)
-            for idx in range(k):
-                this_i = group[group_argsorted[idx]]
-                this_batch_indices = batch_indices[group_argsorted[idx]]
-                sample = [self.dataset.datasets[this_i][i] for i in this_batch_indices]
-                batch_data.append(sample)
-            yield self.collate_fn(batch_data)
+#         # print(f"after {len(all_batches)}, {all_batches}")
+#         # exit(0)
+#         for group, batch_indices in all_batches:
+#             # Collect data for this batch
+#             batch_data = []
+#             group_argsorted = np.argsort(group)
+#             for idx in range(k):
+#                 this_i = group[group_argsorted[idx]]
+#                 this_batch_indices = batch_indices[group_argsorted[idx]]
+#                 sample = [self.dataset.datasets[this_i][i] for i in this_batch_indices]
+#                 batch_data.append(sample)
+#             yield self.collate_fn(batch_data)
 
-    @staticmethod
-    def collate_fn(batch):
-        """batch 结构： [ K个[], 每个[] 32个tuple, 每个tuple (x,y,domain)]"""
-        # print(batch[0])
-        # print(len(batch), len(batch[0]), batch[0][0][0].shape)
+#     @staticmethod
+#     def collate_fn(batch):
+#         """batch 结构： [ K个[], 每个[] 32个tuple, 每个tuple (x,y,domain)]"""
+#         # print(batch[0])
+#         # print(len(batch), len(batch[0]), batch[0][0][0].shape)
         
-        # 将原始batch结构转换为三维张量
-        data = torch.stack([
-            torch.stack([torch.from_numpy(s[0]) for s in sample])
-            for sample in batch
-        ])  # (batch_size, k, features)
+#         # 将原始batch结构转换为三维张量
+#         data = torch.stack([
+#             torch.stack([torch.from_numpy(s[0]) for s in sample])
+#             for sample in batch
+#         ])  # (batch_size, k, features)
         
-        labels = torch.stack([
-            torch.LongTensor([s[1] for s in sample])
-            for sample in batch
-        ])  # (batch_size, k)
+#         labels = torch.stack([
+#             torch.LongTensor([s[1] for s in sample])
+#             for sample in batch
+#         ])  # (batch_size, k)
         
-        domains = torch.stack([
-            torch.LongTensor([s[2] for s in sample])
-            for sample in batch
-        ])  # (batch_size, k)
+#         domains = torch.stack([
+#             torch.LongTensor([s[2] for s in sample])
+#             for sample in batch
+#         ])  # (batch_size, k)
 
-        # print(data.shape, labels.shape, domains.shape)
-        # print(domains)
-        # 按子数据集拆分并重组
-        k = data.shape[0]
-        output = []
-        for i in range(k):
-            output.append((
-                data[i, :, :],    # (batch_size, features)
-                labels[i, :],     # (batch_size,)
-                domains[i, :]     # (batch_size,)
-            ))
-        # print(output)
-        # print(len(output), len(output[0]), output[0][0].shape, output[0][1].shape, output[0][2].shape)
-        return output
+#         # print(data.shape, labels.shape, domains.shape)
+#         # print(domains)
+#         # 按子数据集拆分并重组
+#         k = data.shape[0]
+#         output = []
+#         for i in range(k):
+#             output.append((
+#                 data[i, :, :],    # (batch_size, features)
+#                 labels[i, :],     # (batch_size,)
+#                 domains[i, :]     # (batch_size,)
+#             ))
+#         # print(output)
+#         # print(len(output), len(output[0]), output[0][0].shape, output[0][1].shape, output[0][2].shape)
+#         return output
 
-    def __len__(self):
-        return self.num_batches
+#     def __len__(self):
+#         return self.num_batches
 
 
 # class OnlineSeqToyDataset(Dataset):
