@@ -31,8 +31,10 @@ def generate_data(mean, std, radius, num):
     m_radius = m_data[:, 0] ** 2 + m_data[:, 1] ** 2
     m_data += mean[None, :]
     m_data = m_data[m_radius <= radius ** 2, :]
-    print('num of data points within radius', radius, ':', m_data.shape[0])
-    return m_data
+    m_data_return = m_data[:100, :]
+    print(m_data_return.shape)
+    print('num of data points within radius', radius, ':', m_data_return.shape[0])
+    return m_data_return
 
 # generate label for circle-shape data
 def generate_label(m_data, radius):
@@ -44,7 +46,7 @@ def generate_label(m_data, radius):
 # create dataset, circle-shape domain manifold
 def create_toy_data(t=0, radius_large=5):
     fname = f"./data/growing_circle/data/toy_d30_pi_{t}.pkl"
-    l_angle = list(np.linspace(0, np.pi, 30)) # pi/2,15
+    l_angle = list(np.linspace(0, np.pi, 30))
     # radius_large = radius_large
     radius_small = 1
     std_small = 1
@@ -67,12 +69,23 @@ def create_toy_data(t=0, radius_large=5):
     d_pkl['domain'] = domain_all
     write_pickle(d_pkl, fname)
 
-    if t == 60 or t == 50:
-        l_style = ['k*', 'r*', 'b*', 'y*', 'k.', 'r.']
+    if t % 10 == 0:
+        l_style = ['r*', 'k*', 'g*', 'b*', 'k.', 'r.']
         for i in range(2):
-            data_sub = data_all[label_all == i, :]
-            plt.plot(data_sub[:, 0], data_sub[:, 1], l_style[i])
+            label_mask = (label_all == i)
+            this_label = 'pos' if i else 'neg'
+            for j in range(2):
+                if j == 0:
+                    domain_mask = (domain_all < 6)
+                    tmp_label = 'source_' + this_label
+                else:
+                    domain_mask = (domain_all >= 6)
+                    tmp_label = 'target_' + this_label
+                mask = label_mask & domain_mask
+                data_sub = data_all[mask, :]
+                plt.plot(data_sub[:, 0], data_sub[:, 1], l_style[i*2+j], label=tmp_label)
         plt.title(f"Circle dataset with time frame is {t}.")
+        plt.legend()
         plt.show()
         plt.savefig(f"./data/growing_circle/test_{t}.png")
         plt.clf()
@@ -85,10 +98,14 @@ def create_growing_toy_data(T=100):
         boudnary.append(this_r)
         neg.append(this_r - 0.5)
         pos.append(this_r + 0.5)
-
+    
+    create_toy_data(t=500, radius_large=5)
     plt.plot(np.arange(t+1), boudnary, color='black')
     plt.plot(np.arange(t+1), pos, color='red', linestyle='--')
     plt.plot(np.arange(t+1), neg, color='blue', linestyle='--')
+    plt.xlabel("Time Round")
+    plt.ylabel("Radius")
+    plt.title("Growing Circle")
     plt.show()
     plt.savefig(f"./data/growing_circle/test_all.png")
     plt.clf()
@@ -115,7 +132,7 @@ def create_toy_data_biased_circle():
     for i, angle in enumerate(l_angle):
         mean = np.array([np.cos(angle), np.sin(angle)]) * radius_large_data
         std = np.ones((2,)) * std_small
-        m_data = generate_data(mean, std, radius_small, 300)
+        m_data = generate_data(mean, std, radius_small, 500)
         lm_data.append(m_data)
         l_domain.append(np.ones(m_data.shape[0],) * i)
     data_all = np.concatenate(lm_data, axis=0)
@@ -306,6 +323,7 @@ def dataset_cut_tail(fname='toy_sin_d18_2pi.pkl', fout='toy_sin_d18_2pi_cut.pkl'
 
 
 if __name__ == '__main__':
+    np.random.seed(49)
     create_toy_data()
     create_growing_toy_data()
     #plot_toy_pkl(fname='pred_tmp.pkl', color='gt')

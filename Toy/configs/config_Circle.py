@@ -67,9 +67,10 @@ opt.online = True
 # opt.online = False
 
 if opt.online:
-    opt.k = 10
-    opt.use_selector = True
+    opt.k = opt.num_domain
+    opt.use_selector = False
     opt.num_filtersamples = int(opt.batch_size * 0.1)
+    opt.imbal_lambda = 10  # 可调整 λ 以更好控制分布形态
 else:
     opt.k = opt.num_domain
     opt.use_selector = False

@@ -98,7 +98,7 @@ class BaseModel(nn.Module):
         self.use_selector = self.opt.use_selector
         return
 
-    def learn(self, epoch, dataloader, verbose=False):
+    def learn(self, epoch, dataloader, domain_weights):
         self.train()
 
         self.epoch = epoch
@@ -107,18 +107,11 @@ class BaseModel(nn.Module):
 
         if self.epoch == 0:
             self.reset_buffer()
-            # flag = 0
-            # if self.opt.use_selector:
-            #     while len(self.filter_sel) != self.num_domain:
-            #         for data in dataloader:
-            #             pass
-            #         flag += 1
-            #         break
 
         count = 0
         for data in dataloader:
             count += 1
-            self.__set_input__(data)
+            self.__set_input__(data, domain_weights)
             self.__train_forward__()
             new_loss_values = self.__optimize__()
         
@@ -274,7 +267,7 @@ class BaseModel(nn.Module):
         torch.save(self.netBeta.state_dict(), self.outf + '/netBeta.pth')
         torch.save(self.netBeta2U.state_dict(), self.outf + '/netBeta2U.pth')
 
-    def __set_input__(self, data, train=True, flag=False):
+    def __set_input__(self, data, domain_weights=None, train=True):
         # :param
         #   x_seq: Number of domain x Batch size x  Data dim
         #   y_seq: Number of domain x Batch size x Predict Data dim
@@ -283,6 +276,18 @@ class BaseModel(nn.Module):
         #   domain_seq: Number of domain x Batch size x domain dim (1)
         #   idx_seq: Number of domain x Batch size x 1 (the order in the whole dataset)
         #   y_value_seq: Number of domain x Batch size x Predict Data dim
+
+        # TODO: select domain, deal with samples based on weight
+        '''
+        1. select k domains
+        2. assign total values
+        3. buffer fill data
+        4. 
+        '''
+
+        if self.epoch != 0:
+            pass
+
 
         x_seq, y_seq, domain_seq = [d[0][None, :, :] for d in data
                                         ], [d[1][None, :] for d in data
@@ -314,10 +319,6 @@ class BaseModel(nn.Module):
                 # TODO: union to the batch data
                 if elem in self.domain_sel: 
                     continue  # if current batch already contains this domain data
-                # print(elem, self.domain_sel, self.filter_sel)
-                # exit(0)
-                # print(self.y_seq[elem].shape, self.y_filtered[elem].shape)
-                # print(self.x_seq[elem, :, :].shape, self.x_filtered[elem].shape)
                 self.x_seq[elem, :, :] = self.x_filtered[elem].clone()
                 self.y_seq[elem] = self.y_filtered[elem].clone()
                 self.domain_seq[elem] = self.domain_filtered[elem].clone()
