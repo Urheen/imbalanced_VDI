@@ -113,26 +113,23 @@ poisson_probs_normalized = poisson_probs / np.sum(poisson_probs)
 domain_weights = torch.from_numpy(poisson_probs_normalized)
 # sampled_classes = np.random.choice(opt.num_domain, size=3, p=poisson_probs_normalized, replace=False)
 # selected = torch.multinomial(domain_weights, 3)
-dataloader, test_loader = get_loader(opt, 0, return_test_loader=True)
-# train  
+dataloader, test_loader = get_loader(opt, -999, return_test_loader=True)
+# train
 for epoch in range(opt.num_epoch):
     if epoch == 0:
+        # dataloader, test_loader = get_loader(opt, epoch, return_test_loader=True)
         model.test(epoch, test_loader)
-        for warm_epoch in range(-opt.warm_epoch, 0):
-            model.learn(warm_epoch, dataloader, domain_weights=torch.ones_like(domain_weights))
-            test_flag = (warm_epoch + 1) % opt.test_interval == 0 or (warm_epoch + 1) == opt.warm_epoch
-            if test_flag:
-                model.test(warm_epoch, test_loader)
-        assert warm_epoch == -1, f"Warm-up training is not finished with warm_epoch {warm_epoch}!!!"
-        print(f"warm up training DONE!")
-        
-        model.test(epoch, test_loader)
+        # if opt.online:
+        #     print(f"The domain for each batch is {opt.k}.")
+        #     if opt.use_selector:
+        #         print(f"The number of the selected samples is {opt.num_filtersamples}.")
+        # warmup training
         model.learn(epoch, dataloader, domain_weights=torch.ones_like(domain_weights))
         continue
 
     save_flag = (epoch + 1) % opt.save_interval == 0 or (epoch + 1) == opt.num_epoch
     test_flag = (epoch + 1) % opt.test_interval == 0 or (epoch + 1) == opt.num_epoch
-    dataloader, test_loader = get_loader(opt, epoch, return_test_loader=test_flag)
+    # dataloader, test_loader = get_loader(opt, epoch, return_test_loader=flag)
 
     model.learn(epoch, dataloader, domain_weights=domain_weights)
 

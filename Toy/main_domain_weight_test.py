@@ -50,3 +50,12 @@ for alpha_val in alpha_vals:
     plt.savefig(f"./test_dirichlet_{alpha_val}.png")
     plt.clf()
 exit(0)
+
+# dataloader, test_loader = get_loader(opt, epoch, return_test_loader=True)
+        # for warm_epoch in range(opt.warm_epoch):
+        #     model.learn(warm_epoch, dataloader, domain_weights=torch.ones_like(domain_weights))
+        #     test_flag = (warm_epoch + 1) % opt.test_interval == 0 or (warm_epoch + 1) == opt.num_epoch
+        #     if test_flag:
+        #         model.test(epoch, test_loader)
+        # assert warm_epoch == opt.warm_epoch-1, f"Warm-up training is not finished with warm_epoch {warm_epoch}!!!"
+        # print(f"warm up training DONE!")

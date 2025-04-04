@@ -34,7 +34,8 @@ opt.final_lr = 1e-8
 opt.warmup_steps = 40
 
 opt.seed = 2333
-opt.num_epoch = 200
+opt.num_epoch = 100
+opt.warm_epoch = 200
 opt.batch_size = 16
 
 opt.use_visdom = False  # True

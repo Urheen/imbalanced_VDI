@@ -44,10 +44,10 @@ class SeqToyDataset(Dataset):
     def __init__(self, datasets, size=3 * 200):
         self.datasets = datasets
         self.size = size
-        print(self.size)
+        # print(self.size)
         # exit(0)
-        print('SeqDataset Size {} Sub Size {}'.format(
-            size, [len(ds) for ds in datasets]))
+        # print('SeqDataset Size {} Sub Size {}'.format(
+        #     size, [len(ds) for ds in datasets]))
 
     def __len__(self):
         return self.size

@@ -56,7 +56,7 @@ def create_toy_data(t=0, radius_large=5):
     for i, angle in enumerate(l_angle):
         mean = np.array([np.cos(angle), np.sin(angle)]) * radius_large
         std = np.ones((2,)) * std_small
-        m_data = generate_data(mean, std, radius_small, 300)
+        m_data = generate_data(mean, std, radius_small, 400)
         lm_data.append(m_data)
         l_domain.append(np.ones(m_data.shape[0],) * i)
     data_all = np.concatenate(lm_data, axis=0)
@@ -99,7 +99,7 @@ def create_growing_toy_data(T=100):
         neg.append(this_r - 0.5)
         pos.append(this_r + 0.5)
     
-    create_toy_data(t=500, radius_large=5)
+    # create_toy_data(t=500, radius_large=5)
     plt.plot(np.arange(t+1), boudnary, color='black')
     plt.plot(np.arange(t+1), pos, color='red', linestyle='--')
     plt.plot(np.arange(t+1), neg, color='blue', linestyle='--')
