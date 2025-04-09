@@ -34,8 +34,9 @@ opt.final_lr = 1e-8
 opt.warmup_steps = 40
 
 opt.seed = 2333
-opt.num_epoch = 100
-opt.warm_epoch = 200
+opt.num_epoch = 800
+opt.warm_epoch = 800
+opt.total_epoch = opt.num_epoch + opt.warm_epoch
 opt.batch_size = 16
 
 opt.use_visdom = False  # True
@@ -65,10 +66,10 @@ opt.beta_dim = 2  # the dimension of global domain index beta
 
 # online settings, # of domain in each batch
 opt.online = True
-# opt.online = False
+opt.online = False
 
 if opt.online:
-    opt.k = 10
+    opt.k = 5
     opt.use_selector = False
     opt.num_filtersamples = int(opt.batch_size * 0.1)
     opt.imbal_lambda = 10  # 可调整 λ 以更好控制分布形态
@@ -76,3 +77,4 @@ else:
     opt.k = opt.num_domain
     opt.use_selector = False
     opt.num_filtersamples = 0
+    opt.imbal_lambda = 10  # 可调整 λ 以更好控制分布形态

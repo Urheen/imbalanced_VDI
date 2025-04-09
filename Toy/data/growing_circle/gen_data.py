@@ -93,7 +93,7 @@ def create_toy_data(t=0, radius_large=5):
 def create_growing_toy_data(T=100):
     boudnary, neg, pos  = [], [], []
     for t in range(T):
-        this_r = np.cos(t / np.pi) * 2 + 6
+        this_r = np.sin(t / np.pi) * 2 + 5
         create_toy_data(t=t, radius_large=this_r)
         boudnary.append(this_r)
         neg.append(this_r - 0.5)

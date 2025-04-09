@@ -98,7 +98,7 @@ class BaseModel(nn.Module):
         self.use_selector = self.opt.use_selector
         return
 
-    def learn(self, epoch, dataloader, domain_weights):
+    def learn(self, epoch, dataloader, domain_weights=None):
         self.train()
 
         self.epoch = epoch
@@ -107,6 +107,16 @@ class BaseModel(nn.Module):
 
         if self.epoch == 0:
             self.reset_buffer()
+
+        if self.epoch > 0:
+            if self.opt.online:
+                domain_sampled = np.random.choice(self.opt.num_domain, size=self.opt.k, replace=False, p=domain_weights)
+                self.domain_sel = np.sort(domain_sampled).tolist()
+            else:
+                self.domain_sel = np.arange(self.opt.num_domain).tolist()
+            # print(self.domain_sel)
+        else:
+            self.domain_sel = np.arange(self.opt.num_domain).tolist()
 
         count = 0
         for data in dataloader:
@@ -162,6 +172,8 @@ class BaseModel(nn.Module):
         l_y = []
         l_u = np.zeros((self.num_domain, self.opt.u_dim))
         l_u_all = []
+
+        self.domain_sel = np.arange(self.opt.num_domain).tolist()
 
         for data in dataloader:
             self.__set_input__(data)
@@ -230,7 +242,8 @@ class BaseModel(nn.Module):
         if (
                 self.epoch + 1
         ) % self.opt.save_interval == 0 or self.epoch + 1 == self.opt.num_epoch:
-            write_pickle(d_all, self.opt.outf + '/' + str(epoch) + '_pred.pkl')
+            if self.epoch >= -1:
+                write_pickle(d_all, self.opt.outf + '/' + str(epoch) + '_pred.pkl')
 
         return test_acc, self.nan_flag
 
@@ -285,10 +298,6 @@ class BaseModel(nn.Module):
         4. 
         '''
 
-        if self.epoch != 0:
-            pass
-
-
         x_seq, y_seq, domain_seq = [d[0][None, :, :] for d in data
                                         ], [d[1][None, :] for d in data
                                             ], [d[2][None, :] for d in data]
@@ -296,7 +305,7 @@ class BaseModel(nn.Module):
         self.x_seq_tmp = torch.cat(x_seq, 0).to(self.device)
         self.y_seq_tmp = torch.cat(y_seq, 0).to(self.device)
         self.domain_seq_tmp = torch.cat(domain_seq, 0).to(self.device)
-        self.domain_sel = torch.unique(self.domain_seq_tmp).tolist()
+        # self.domain_sel = torch.unique(self.domain_seq_tmp).tolist()
 
         self.x_seq = torch.zeros((self.num_domain, *self.x_seq_tmp.shape[1:])).to(self.device)
         self.y_seq = torch.zeros((self.num_domain, *self.y_seq_tmp.shape[1:])).to(device=self.device, dtype=torch.long)
@@ -309,21 +318,29 @@ class BaseModel(nn.Module):
         for idx, elem in enumerate(self.domain_sel):
             # print(idx, elem)
             # print(self.x_seq[elem].shape, self.x_seq_tmp[idx].shape)
-            self.x_seq[elem, :, :] = self.x_seq_tmp[idx]
-            self.y_seq[elem] = self.y_seq_tmp[idx]
-            self.domain_seq[elem] = self.domain_seq_tmp[idx]
+            self.x_seq[elem, :, :] = self.x_seq_tmp[elem]
+            self.y_seq[elem] = self.y_seq_tmp[elem]
+            self.domain_seq[elem] = self.domain_seq_tmp[elem]
 
-        if len(self.filter_sel):
-            # print(self.domain_sel, self.filter_sel)
-            for idx, elem in enumerate(self.filter_sel):
-                # TODO: union to the batch data
-                if elem in self.domain_sel: 
-                    continue  # if current batch already contains this domain data
-                self.x_seq[elem, :, :] = self.x_filtered[elem].clone()
-                self.y_seq[elem] = self.y_filtered[elem].clone()
-                self.domain_seq[elem] = self.domain_filtered[elem].clone()
-                self.domain_sel_mask[elem, :self.opt.num_filtersamples] = 1.0  # TODO: here we need to mask out the fake samples
-            self.x_seq.requires_grad = True
+
+            # curr_weight = domain_weights[elem]
+            # curr_sample = int(curr_weight * self.x_seq.shape[1])
+            # pos_idx = torch.nonzero(self.y_seq_tmp[elem] == 1, as_tuple=False).squeeze()
+            # neg_idx = torch.nonzero(self.y_seq_tmp[elem] == 0, as_tuple=False).squeeze()
+            
+            
+
+        # if len(self.filter_sel):
+        #     # print(self.domain_sel, self.filter_sel)
+        #     for idx, elem in enumerate(self.filter_sel):
+        #         # TODO: union to the batch data
+        #         if elem in self.domain_sel: 
+        #             continue  # if current batch already contains this domain data
+        #         self.x_seq[elem, :, :] = self.x_filtered[elem].clone()
+        #         self.y_seq[elem] = self.y_filtered[elem].clone()
+        #         self.domain_seq[elem] = self.domain_filtered[elem].clone()
+        #         self.domain_sel_mask[elem, :self.opt.num_filtersamples] = 1.0  # TODO: here we need to mask out the fake samples
+        #     self.x_seq.requires_grad = True
 
         # here need to be fixed......
         self.tmp_batch_size = self.x_seq.shape[1]
@@ -701,7 +718,7 @@ class VDI(BaseModel):
             init_lr=opt.init_lr,
             peak_lr=opt.peak_lr_e,
             warmup_steps=opt.warmup_steps,
-            decay_steps=opt.num_epoch - opt.warmup_steps,
+            decay_steps=opt.total_epoch - opt.warmup_steps,
             gamma=0.5**(1 / 100),
             final_lr=opt.final_lr)
         self.lr_scheduler_D = TransformerLRScheduler(
@@ -709,7 +726,7 @@ class VDI(BaseModel):
             init_lr=opt.init_lr,
             peak_lr=opt.peak_lr_d,
             warmup_steps=opt.warmup_steps,
-            decay_steps=opt.num_epoch - opt.warmup_steps,
+            decay_steps=opt.total_epoch - opt.warmup_steps,
             gamma=0.5**(1 / 100),
             final_lr=opt.final_lr)
 

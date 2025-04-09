@@ -5,10 +5,6 @@ import random
 import pickle
 import argparse
 import importlib.util
-import warnings
-import scipy.stats as stats
-import matplotlib.pyplot as plt
-warnings.filterwarnings("ignore")
 
 # load the config files
 parser = argparse.ArgumentParser(description='Choose the configs to run.')
@@ -101,44 +97,13 @@ def get_loader(opt, t, return_test_loader=False):
 
     return dataloader, test_loader
 
-# with open("data/growing_circle/data/toy_d30_pi_500.pkl", "rb") as data_file:
-#     curr_data_pkl = pickle.load(data_file)
 
-# with open("data/toy_d15_quarter_circle.pkl", "rb") as data_file:
-#     ref_data_pkl = pickle.load(data_file)
-
-# print(curr_data_pkl['data'].mean(), curr_data_pkl['label'].sum())
-
-# print(ref_data_pkl['data'].mean(), ref_data_pkl['label'].sum())
-
-# l_style_self = ['k*', 'r*', 'b*', 'y*', 'k.', 'r.']
-# c_style_self = ['red', 'blue']
-# l_style_ref = ['k*', 'r*', 'b*', 'y*', 'k.', 'r.']
-# c_style_ref = ['green', 'yellow']
-# for i in range(2):
-#     data_sub = curr_data_pkl['data'][curr_data_pkl['label'] == i, :]
-#     plt.plot(data_sub[:, 0], data_sub[:, 1], l_style_self[i], color=c_style_self[i], alpha=0.5)
-
-#     data_sub = ref_data_pkl['data'][ref_data_pkl['label'] == i, :]
-#     plt.plot(data_sub[:, 0], data_sub[:, 1], l_style_ref[i], color=c_style_ref[i], alpha=0.5)
-# plt.title(f"Circle dataset with time frame.")
-# plt.show()
-# plt.savefig(f"./test_self.png")
-# plt.clf()
-
-# 千万不能un-comment，会降低performance
-# alpha = torch.ones(opt.num_domain)
-# dirichlet_weights = torch.distributions.dirichlet.Dirichlet(alpha).sample()
-# selected_domains = torch.topk(dirichlet_weights, opt.k).indices.tolist()
-
-
-
+import scipy.stats as stats
 poisson_probs = stats.poisson.pmf(np.arange(opt.num_domain), opt.imbal_lambda) + 1e-6
 poisson_probs_normalized = poisson_probs / np.sum(poisson_probs)
 domain_weights = np.array(poisson_probs_normalized)
-# domain_weights = None
 dataloader, test_loader = get_loader(opt, 0, return_test_loader=True)
-# train  
+
 for epoch in range(opt.num_epoch):
     if epoch == 0:
         model.test(epoch, test_loader)
@@ -150,7 +115,7 @@ for epoch in range(opt.num_epoch):
         # assert warm_epoch == -1, f"Warm-up training is not finished with warm_epoch {warm_epoch}!!!"
         # print(f"warm up training DONE!")
         
-        model.test(epoch, test_loader)
+        # model.test(epoch, test_loader)
         # # exit(0)
         model.learn(epoch, dataloader, domain_weights=np.ones_like(domain_weights))
         continue
@@ -167,4 +132,16 @@ for epoch in range(opt.num_epoch):
         model.save()
     if test_flag:
         model.test(epoch, test_loader)
-print('hufu')
+# # train
+# for epoch in range(opt.num_epoch):
+#     if epoch == 0:
+#         model.test(epoch, test_loader)
+#         model.test(epoch, test_loader)
+#         model.learn(epoch, dataloader, domain_weights)
+#         continue
+#     model.learn(epoch, dataloader, domain_weights)
+#     if (epoch + 1) % opt.save_interval == 0 or (epoch + 1) == opt.num_epoch:
+#         model.save()
+#     if (epoch + 1) % opt.test_interval == 0 or (epoch + 1) == opt.num_epoch:
+#         model.test(epoch, test_loader)
+print('hsl')
