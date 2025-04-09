@@ -127,15 +127,30 @@ def get_loader(opt, t, return_test_loader=False):
 # plt.clf()
 
 # 千万不能un-comment，会降低performance
-# alpha = torch.ones(opt.num_domain)
-# dirichlet_weights = torch.distributions.dirichlet.Dirichlet(alpha).sample()
-# selected_domains = torch.topk(dirichlet_weights, opt.k).indices.tolist()
+# alpha = np.ones(opt.num_domain)
+# dirichlet_weights = torch.distributions.dirichlet.Dirichlet(alpha, generator=local_generator).sample()
+# from numpy.random import Generator, PCG64
+alpha = np.ones(opt.num_domain)
+rng_numpy = np.random.default_rng(seed=42)
+dirichlet_weights = rng_numpy.dirichlet(alpha)
 
-
-
-poisson_probs = stats.poisson.pmf(np.arange(opt.num_domain), opt.imbal_lambda) + 1e-6
+rng_scipy = np.random.default_rng(seed=42)
+Poss = stats.poisson
+Poss.random_state = rng_scipy 
+poisson_probs = Poss.pmf(np.arange(opt.num_domain), opt.imbal_lambda) + 1e-6
 poisson_probs_normalized = poisson_probs / np.sum(poisson_probs)
 domain_weights = np.array(poisson_probs_normalized)
+
+# print(dirichlet_weights)
+# print(domain_weights)
+
+# plt.bar(np.arange(len(dirichlet_weights)), sorted(dirichlet_weights))
+# plt.savefig('./np.png')
+# plt.clf()
+# plt.bar(np.arange(len(dirichlet_weights)), domain_weights)
+# plt.savefig('./torch.png')
+# plt.clf()
+# exit(0)
 # domain_weights = None
 dataloader, test_loader = get_loader(opt, 0, return_test_loader=True)
 # train  
@@ -150,7 +165,7 @@ for epoch in range(opt.num_epoch):
         # assert warm_epoch == -1, f"Warm-up training is not finished with warm_epoch {warm_epoch}!!!"
         # print(f"warm up training DONE!")
         
-        model.test(epoch, test_loader)
+        # model.test(epoch, test_loader)
         # # exit(0)
         model.learn(epoch, dataloader, domain_weights=np.ones_like(domain_weights))
         continue
@@ -167,4 +182,4 @@ for epoch in range(opt.num_epoch):
         model.save()
     if test_flag:
         model.test(epoch, test_loader)
-print('hufu')
+print('hkghu')

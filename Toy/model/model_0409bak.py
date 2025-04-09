@@ -98,7 +98,7 @@ class BaseModel(nn.Module):
         self.use_selector = self.opt.use_selector
         return
 
-    def learn(self, epoch, dataloader, domain_weights):
+    def learn(self, epoch, dataloader, domain_weights=None):
         self.train()
 
         self.epoch = epoch

@@ -5,6 +5,8 @@ import random
 import pickle
 import argparse
 import importlib.util
+import scipy.stats as stats
+
 
 # load the config files
 parser = argparse.ArgumentParser(description='Choose the configs to run.')
@@ -97,11 +99,24 @@ def get_loader(opt, t, return_test_loader=False):
 
     return dataloader, test_loader
 
+# alpha = torch.ones(opt.num_domain)
+# dirichlet_weights = torch.distributions.dirichlet.Dirichlet(alpha).sample()
+# selected_domains = torch.topk(dirichlet_weights, opt.k).indices.tolist()
+alpha = np.ones(opt.num_domain)
+rng_numpy = np.random.default_rng(seed=42)
+dirichlet_weights = rng_numpy.dirichlet(alpha)
 
-import scipy.stats as stats
+rng_scipy = np.random.default_rng(seed=42)
+Poss = stats.poisson
+Poss.random_state = rng_scipy 
+poisson_probs = Poss.pmf(np.arange(opt.num_domain), opt.imbal_lambda) + 1e-6
+poisson_probs_normalized = poisson_probs / np.sum(poisson_probs)
+domain_weights = np.array(poisson_probs_normalized)
 poisson_probs = stats.poisson.pmf(np.arange(opt.num_domain), opt.imbal_lambda) + 1e-6
 poisson_probs_normalized = poisson_probs / np.sum(poisson_probs)
 domain_weights = np.array(poisson_probs_normalized)
+
+
 dataloader, test_loader = get_loader(opt, 0, return_test_loader=True)
 
 for epoch in range(opt.num_epoch):
@@ -117,12 +132,12 @@ for epoch in range(opt.num_epoch):
         
         # model.test(epoch, test_loader)
         # # exit(0)
-        model.learn(epoch, dataloader, domain_weights=np.ones_like(domain_weights))
+        model.learn(epoch, dataloader)
         continue
 
     # dataloader, test_loader = get_loader(opt, epoch, return_test_loader=test_flag)
 
-    model.learn(epoch, dataloader, domain_weights=domain_weights)
+    model.learn(epoch, dataloader)
     # np.random.shuffle(domain_weights)
 
     save_flag = (epoch + 1) % opt.save_interval == 0 or (epoch + 1) == opt.num_epoch
@@ -144,4 +159,4 @@ for epoch in range(opt.num_epoch):
 #         model.save()
 #     if (epoch + 1) % opt.test_interval == 0 or (epoch + 1) == opt.num_epoch:
 #         model.test(epoch, test_loader)
-print('hsl')
+print('hrewl')
