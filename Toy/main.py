@@ -195,7 +195,6 @@ if opt.use_pretrain_model_warmup:
         print(f"WARMUP training is COMPLETE.")
         exit(0)
 
-
 # train with warmup
 for epoch in range(opt.warm_epoch + opt.num_epoch):
     if epoch < opt.warm_epoch:
