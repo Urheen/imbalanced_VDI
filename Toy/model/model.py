@@ -66,6 +66,10 @@ class BaseModel(nn.Module):
         self.model_path = self.outf + '/model.pth'
         if not os.path.exists(self.opt.outf):
             os.mkdir(self.opt.outf)
+
+        if not os.path.exists(self.opt.outf_warm):
+            os.mkdir(self.opt.outf_warm)
+
         with open(self.train_log, 'w') as f:
             f.write("log start!\n")
 
@@ -98,7 +102,7 @@ class BaseModel(nn.Module):
         self.use_selector = self.opt.use_selector
         return
 
-    def learn(self, epoch, dataloader, domain_weights=None):
+    def learn(self, epoch, dataloader, domain_weights=None, verbose=False):
         self.train()
 
         self.epoch = epoch
@@ -109,11 +113,12 @@ class BaseModel(nn.Module):
             self.reset_buffer()
 
         if self.epoch > 0:
-            if self.opt.online:
-                domain_sampled = np.random.choice(self.opt.num_domain, size=self.opt.k, replace=False, p=domain_weights)
-                self.domain_sel = np.sort(domain_sampled).tolist()
-            else:
-                self.domain_sel = np.arange(self.opt.num_domain).tolist()
+            # if self.opt.online:
+            #     domain_sampled = np.random.choice(self.opt.num_domain, size=self.opt.k, replace=False, p=domain_weights)
+            #     self.domain_sel = np.sort(domain_sampled).tolist()
+            # else:
+            #     self.domain_sel = np.arange(self.opt.num_domain).tolist()
+            self.domain_sel = np.arange(self.opt.num_domain).tolist()
             # print(self.domain_sel)
         else:
             self.domain_sel = np.arange(self.opt.num_domain).tolist()
@@ -145,9 +150,10 @@ class BaseModel(nn.Module):
         if self.use_visdom:
             self.__vis_loss__(loss_values)
 
-        if (self.epoch + 1) % 10 == 0 or self.epoch == 0:
-            print("epoch {}, loss: {}, lambda gan: {}".format(
-                self.epoch, loss_values, self.opt.lambda_gan))
+        if verbose:
+            if (self.epoch + 1) % 10 == 0 or self.epoch == 0:
+                print("epoch {}, loss: {}, lambda gan: {}".format(
+                    self.epoch, loss_values, self.opt.lambda_gan))
 
         # learning rate decay
         for lr_scheduler in self.lr_schedulers:
@@ -270,15 +276,16 @@ class BaseModel(nn.Module):
                           win=self.test_pane[title],
                           update='append')
 
-    def save(self):
-        torch.save(self.netU.state_dict(), self.outf + '/netU.pth')
-        torch.save(self.netUCon.state_dict(), self.outf + '/netUCon.pth')
-        torch.save(self.netZ.state_dict(), self.outf + '/netZ.pth')
-        torch.save(self.netF.state_dict(), self.outf + '/netF.pth')
-        torch.save(self.netR.state_dict(), self.outf + '/netR.pth')
-        torch.save(self.netD.state_dict(), self.outf + '/netD.pth')
-        torch.save(self.netBeta.state_dict(), self.outf + '/netBeta.pth')
-        torch.save(self.netBeta2U.state_dict(), self.outf + '/netBeta2U.pth')
+    def save(self, warm=False):
+        fpath = self.opt.outf_warm if warm else self.outf 
+        torch.save(self.netU.state_dict(), fpath + '/netU.pth')
+        torch.save(self.netUCon.state_dict(), fpath + '/netUCon.pth')
+        torch.save(self.netZ.state_dict(), fpath + '/netZ.pth')
+        torch.save(self.netF.state_dict(), fpath + '/netF.pth')
+        torch.save(self.netR.state_dict(), fpath + '/netR.pth')
+        torch.save(self.netD.state_dict(), fpath + '/netD.pth')
+        torch.save(self.netBeta.state_dict(), fpath + '/netBeta.pth')
+        torch.save(self.netBeta2U.state_dict(), fpath + '/netBeta2U.pth')
 
     def __set_input__(self, data, domain_weights=None, train=True):
         # :param
@@ -410,15 +417,19 @@ class BaseModel(nn.Module):
         self.loss_D = self.__loss_D__(self.d_seq)
 
     def __test_forward__(self):
+        self.eval()
         self.u_seq, self.u_mu_seq, self.u_log_var_seq = self.netU(self.x_seq)
 
-        if self.use_beta_seq != None:
-            self.beta_seq, _ = self.netBeta(self.use_beta_seq,
-                                            self.use_beta_seq)
-        else:
-            self.tmp_beta_seq = self.generate_beta(self.u_seq)
-            self.beta_seq, _ = self.netBeta(self.tmp_beta_seq,
-                                            self.tmp_beta_seq)
+        # if self.use_beta_seq != None:
+        #     self.beta_seq, _ = self.netBeta(self.use_beta_seq,
+        #                                     self.use_beta_seq)
+        # else:
+        #     self.tmp_beta_seq = self.generate_beta(self.u_seq)
+        #     self.beta_seq, _ = self.netBeta(self.tmp_beta_seq,
+        #                                     self.tmp_beta_seq)
+        self.tmp_beta_seq = self.generate_beta(self.u_seq)
+        self.beta_seq, _ = self.netBeta(self.tmp_beta_seq,
+                                        self.tmp_beta_seq)
 
         self.q_z_seq, self.q_z_mu_seq, self.q_z_log_var_seq, self.p_z_seq, self.p_z_mu_seq, self.p_z_log_var_seq, = self.netZ(
             self.x_seq, self.u_seq, self.beta_seq)
@@ -687,6 +698,15 @@ class VDI(BaseModel):
             self.netD.load_state_dict(torch.load(self.opt.pretrain_model_all_path + '/netD.pth'))
             self.netBeta.load_state_dict(torch.load(self.opt.pretrain_model_all_path + '/netBeta.pth'))
             self.netBeta2U.load_state_dict(torch.load(self.opt.pretrain_model_all_path + '/netBeta2U.pth'))
+        elif self.opt.use_pretrain_model_warmup:
+            self.netU.load_state_dict(torch.load(self.opt.pretrain_model_warmup_path + '/netU.pth'))
+            self.netUCon.load_state_dict(torch.load(self.opt.pretrain_model_warmup_path + '/netUCon.pth'))
+            self.netZ.load_state_dict(torch.load(self.opt.pretrain_model_warmup_path + '/netZ.pth'))
+            self.netF.load_state_dict(torch.load(self.opt.pretrain_model_warmup_path + '/netF.pth'))
+            self.netR.load_state_dict(torch.load(self.opt.pretrain_model_warmup_path + '/netR.pth'))
+            self.netD.load_state_dict(torch.load(self.opt.pretrain_model_warmup_path + '/netD.pth'))
+            self.netBeta.load_state_dict(torch.load(self.opt.pretrain_model_warmup_path + '/netBeta.pth'))
+            self.netBeta2U.load_state_dict(torch.load(self.opt.pretrain_model_warmup_path + '/netBeta2U.pth'))
 
         if self.opt.fix_u_r:
             UZF_parameters = list(self.netZ.parameters()) + list(

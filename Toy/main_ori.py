@@ -140,8 +140,8 @@ for epoch in range(opt.num_epoch):
     model.learn(epoch, dataloader)
     # np.random.shuffle(domain_weights)
 
-    # if (epoch + 1) != opt.num_epoch:
-    #     continue
+    if (epoch + 1) != opt.num_epoch:
+        continue
     save_flag = (epoch + 1) % opt.save_interval == 0 or (epoch + 1) == opt.num_epoch
     test_flag = (epoch + 1) % opt.test_interval == 0 or (epoch + 1) == opt.num_epoch
 

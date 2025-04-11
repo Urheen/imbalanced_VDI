@@ -22,7 +22,6 @@ opt.use_pretrain_R = False
 # opt.pretrain_R_path =  "data/netR_1_c30.pth" # "data/netR_2_dann.pth" # "data/netR_4_dann.pth"
 # opt.pretrain_U_path = "data/netU_1_c30.pth" # "data/netU_2_dann.pth" # "data/netU_4_dann.pth"
 opt.fix_u_r = False
-opt.use_pretrain_model_all = False
 
 opt.d_loss_type = "DANN_loss_mean"  # "CIDA_loss" # "GRDA_loss" # "DANN_loss" "DANN_loss_mean"
 
@@ -34,8 +33,8 @@ opt.final_lr = 1e-8
 opt.warmup_steps = 40
 
 opt.seed = 2333
-opt.num_epoch = 0
-opt.warm_epoch = 300
+opt.num_epoch = 100
+opt.warm_epoch = 700
 opt.total_epoch = 700
 opt.batch_size = 16
 
@@ -44,9 +43,10 @@ opt.visdom_port = 2000
 opt.test_on_all_dmn = False
 tmp_time = localtime()
 opt.outf = "result_save/{}".format(strftime("%Y-%m-%d %H:%M:%S", tmp_time))
+opt.outf_warm = f"warmup"
 
 opt.save_interval = 50
-opt.test_interval = 20  # 20
+opt.test_interval = 10  # 20
 
 opt.device = "cuda"
 opt.gpu_device = "0"
@@ -63,6 +63,13 @@ opt.input_dim = 2  # the dimension of input data x
 
 opt.u_dim = 2  # the dimension of local domain index u
 opt.beta_dim = 2  # the dimension of global domain index beta
+
+opt.use_pretrain_model_all = False
+opt.use_pretrain_model_warmup = True
+
+opt.pretrain_model_all_path = opt.outf
+opt.pretrain_model_warmup_path = opt.outf_warm
+opt.epoch_per_T = 100
 
 # online settings, # of domain in each batch
 opt.online = True

@@ -33,7 +33,7 @@ opt.peak_lr_d = 1.1 * 1e-4
 opt.final_lr = 1e-8
 opt.warmup_steps = 40
 
-opt.seed = 2333
+opt.seed = 2333 
 opt.num_epoch = 300
 opt.total_epoch = 700
 opt.batch_size = 16
@@ -45,7 +45,7 @@ tmp_time = localtime()
 opt.outf = "result_save/{}".format(strftime("%Y-%m-%d %H:%M:%S", tmp_time))
 
 opt.save_interval = 50
-opt.test_interval = 20  # 20
+opt.test_interval = 100  # 20
 
 opt.device = "cuda"
 opt.gpu_device = "0"
