@@ -60,6 +60,7 @@ class BaseModel(nn.Module):
             self.test_pane_init = False
 
         self.num_domain = opt.num_domain
+        self.rng_numpy = np.random.default_rng(seed=opt.seed)
 
         self.outf = self.opt.outf
         self.train_log = self.outf + "/loss.log"
@@ -87,46 +88,41 @@ class BaseModel(nn.Module):
         # beta:
         self.use_beta_seq = None
 
-        self.x_filtered = {}
-        self.y_filtered = {}
-        self.domain_filtered = {}
-        self.filter_sel = set()
-        self.use_selector = self.opt.use_selector
+        self.x_buffer = {}
+        self.y_buffer = {}
+        self.domain_buffer = {}
+        self.buffer_sel = torch.ones((self.num_domain, self.opt.batch_size)).to(self.device) * -1.
+        self.use_buffer = self.opt.use_buffer
 
     def reset_buffer(self):
-        del self.x_filtered, self.y_filtered, self.domain_filtered, self.filter_sel
-        self.x_filtered = {}
-        self.y_filtered = {}
-        self.domain_filtered = {}
-        self.filter_sel = set()
-        self.use_selector = self.opt.use_selector
+        del self.x_buffer, self.y_buffer, self.domain_buffer, self.buffer_sel
+        self.x_buffer = {}
+        self.y_buffer = {}
+        self.domain_buffer = {}
+        self.buffer_sel = torch.ones((self.num_domain, self.opt.batch_size)).to(self.device) * -1.
+        self.use_buffer = self.opt.use_buffer
         return
 
-    def learn(self, epoch, dataloader, domain_weights=None, verbose=False):
+    def learn(self, epoch, dataloader, domain_weight_renorm=None, domain_sel=None, save_buffer_data=False, verbose=False):
         self.train()
 
         self.epoch = epoch
         loss_values = {loss: 0 for loss in self.loss_names}
         self.new_u = []
 
-        if self.epoch == 0:
-            self.reset_buffer()
+        # if self.epoch == 0:
+        #     self.reset_buffer()
 
-        if self.epoch > 0:
-            # if self.opt.online:
-            #     domain_sampled = np.random.choice(self.opt.num_domain, size=self.opt.k, replace=False, p=domain_weights)
-            #     self.domain_sel = np.sort(domain_sampled).tolist()
-            # else:
-            #     self.domain_sel = np.arange(self.opt.num_domain).tolist()
-            self.domain_sel = np.arange(self.opt.num_domain).tolist()
-            # print(self.domain_sel)
+        if self.opt.use_pretrain_model_warmup:
+            self.domain_sel = domain_sel
         else:
             self.domain_sel = np.arange(self.opt.num_domain).tolist()
-
+            domain_weight_renorm = np.ones_like(self.domain_sel)
+        # self.domain_sel = np.arange(self.opt.num_domain).tolist()
         count = 0
         for data in dataloader:
             count += 1
-            self.__set_input__(data, domain_weights)
+            self.__set_input__(data, domain_weight_renorm)
             self.__train_forward__()
             new_loss_values = self.__optimize__()
         
@@ -136,9 +132,8 @@ class BaseModel(nn.Module):
 
             self.new_u.append(self.u_seq)
 
-            if self.opt.use_selector:
-                if self.tmp_batch_size == self.opt.batch_size:
-                    self.__filter_input__()
+            if self.opt.use_buffer and save_buffer_data:
+                    self.__buffer_input__()
 
         self.new_u = self.my_cat(self.new_u)
         self.use_beta_seq = self.generate_beta(self.new_u)
@@ -157,6 +152,8 @@ class BaseModel(nn.Module):
 
         # learning rate decay
         for lr_scheduler in self.lr_schedulers:
+            if verbose:
+                print(lr_scheduler.update_steps)
             lr_scheduler.step()
 
         # check nan
@@ -182,7 +179,7 @@ class BaseModel(nn.Module):
         self.domain_sel = np.arange(self.opt.num_domain).tolist()
 
         for data in dataloader:
-            self.__set_input__(data)
+            self.__set_input__(data, train=False)
 
             # forward
             with torch.no_grad():
@@ -286,8 +283,9 @@ class BaseModel(nn.Module):
         torch.save(self.netD.state_dict(), fpath + '/netD.pth')
         torch.save(self.netBeta.state_dict(), fpath + '/netBeta.pth')
         torch.save(self.netBeta2U.state_dict(), fpath + '/netBeta2U.pth')
+        torch.save([self.x_buffer, self.y_buffer, self.domain_buffer], fpath + '/buffer.pth')
 
-    def __set_input__(self, data, domain_weights=None, train=True):
+    def __set_input__(self, data, domain_weight_renorm=None, train=True):
         # :param
         #   x_seq: Number of domain x Batch size x  Data dim
         #   y_seq: Number of domain x Batch size x Predict Data dim
@@ -304,7 +302,6 @@ class BaseModel(nn.Module):
         3. buffer fill data
         4. 
         '''
-
         x_seq, y_seq, domain_seq = [d[0][None, :, :] for d in data
                                         ], [d[1][None, :] for d in data
                                             ], [d[2][None, :] for d in data]
@@ -321,6 +318,7 @@ class BaseModel(nn.Module):
         self.domain_sel_mask[self.domain_sel, :] = 1.0
         self.domain_sel_mask.requires_grad = False
         # print(self.domain_sel_mask.shape)
+        self.tmp_batch_size = self.x_seq.shape[1]
 
         for idx, elem in enumerate(self.domain_sel):
             # print(idx, elem)
@@ -329,50 +327,42 @@ class BaseModel(nn.Module):
             self.y_seq[elem] = self.y_seq_tmp[elem]
             self.domain_seq[elem] = self.domain_seq_tmp[elem]
 
-
-            # curr_weight = domain_weights[elem]
-            # curr_sample = int(curr_weight * self.x_seq.shape[1])
-            # pos_idx = torch.nonzero(self.y_seq_tmp[elem] == 1, as_tuple=False).squeeze()
-            # neg_idx = torch.nonzero(self.y_seq_tmp[elem] == 0, as_tuple=False).squeeze()
-            
-            
-
-        # if len(self.filter_sel):
-        #     # print(self.domain_sel, self.filter_sel)
-        #     for idx, elem in enumerate(self.filter_sel):
-        #         # TODO: union to the batch data
-        #         if elem in self.domain_sel: 
-        #             continue  # if current batch already contains this domain data
-        #         self.x_seq[elem, :, :] = self.x_filtered[elem].clone()
-        #         self.y_seq[elem] = self.y_filtered[elem].clone()
-        #         self.domain_seq[elem] = self.domain_filtered[elem].clone()
-        #         self.domain_sel_mask[elem, :self.opt.num_filtersamples] = 1.0  # TODO: here we need to mask out the fake samples
-        #     self.x_seq.requires_grad = True
+            if train:
+                curr_weight = domain_weight_renorm[idx]
+                curr_sample = min(self.tmp_batch_size, int(curr_weight * self.tmp_batch_size)+3)
+                # print(self.domain_sel_mask[elem, :].shape, self.domain_sel[idx], curr_sample)
+                # print(f"{self.domain_sel[idx]}, current mask is {self.domain_sel_mask[elem, :]}")
+                self.domain_sel_mask[elem, curr_sample:] = 0.0
+                # print(f"{self.domain_sel[idx]}, current mask is {self.domain_sel_mask[elem, :]}")
+                
+        # if train:
+        #     print(self.domain_sel)
+        #     print(self.x_buffer[0].shape, self.x_buffer.keys())
+        #     assert False
+        if self.opt.use_buffer:
+            for idx, elem in enumerate(range(self.opt.num_domain)):
+                # TODO: union to the batch data
+                if elem in self.domain_sel: 
+                    continue  # if current batch already contains this domain data
+                self.x_seq[elem, :, :] = self.x_buffer[elem].clone()
+                self.y_seq[elem] = self.y_buffer[elem].clone()
+                self.domain_seq[elem] = self.domain_buffer[elem].clone()
+                self.domain_sel_mask[elem, :self.opt.num_buffersamples] = 1.0  # TODO: here we need to mask out the fake samples
+            self.x_seq.requires_grad = True
 
         # here need to be fixed......
-        self.tmp_batch_size = self.x_seq.shape[1]
-        self.tmp_total_domain_sel = list(set(list(self.filter_sel) + self.domain_sel))
+        if self.opt.use_buffer:
+            self.tmp_total_domain_sel = range(self.opt.num_domain)
+        else:
+            self.tmp_total_domain_sel = self.domain_sel
         self.tmp_num_domain = len(self.tmp_total_domain_sel)
         self.tmp_total_domain_sel = torch.LongTensor(self.tmp_total_domain_sel).to(self.device)
 
-    def __filter_input__(self, flag=False):
-        from sklearn.neighbors import NearestNeighbors
-        if flag:
-            return
+    def __buffer_input__(self):
         for this_domain in self.domain_sel:
-            # if this_domain in self.filter_sel:
-            #     continue  # if already select the sample
             this_domain_data = self.x_seq[this_domain].detach()
             this_domain_label = self.y_seq[this_domain]
             this_domain_domain = self.domain_seq[this_domain]
-            # # print(this_domain, self.domain_sel, self.filter_sel, torch.unique(self.domain_seq), self.domain_seq.shape)
-            # # print(self.x_seq[this_domain].shape, self.y_seq[this_domain].shape, self.domain_seq[this_domain].shape)
-            # this_knn = NearestNeighbors(n_neighbors=self.tmp_batch_size-1)
-            # this_knn.fit(this_domain_data.cpu().numpy())
-            # distances, _ = this_knn.kneighbors(this_domain_data.cpu().numpy())
-
-            # avg_distances = distances[:, 1:].mean(axis=1)  
-            # density = 1 / (avg_distances + 1e-8)  
 
             rng = np.random.default_rng(seed=2766249141)  
             random_values = rng.random(self.tmp_batch_size)        # 不影响全局 np.random
@@ -381,15 +371,29 @@ class BaseModel(nn.Module):
             density = np.ones_like(random_values)
             keys = random_values ** (1 / density)  # Weighted Random Sampling
         
-            selected_indices = np.argsort(-keys)[:self.opt.num_filtersamples]
+            selected_indices = np.argsort(-keys)[:self.opt.num_buffersamples]
 
-            self.x_filtered[this_domain] = repeat_data(this_domain_data[selected_indices], self.tmp_batch_size)
-            self.y_filtered[this_domain] = repeat_data(this_domain_label[selected_indices].unsqueeze(-1), self.tmp_batch_size).squeeze(-1)
-            self.domain_filtered[this_domain] = repeat_data(this_domain_domain[selected_indices].unsqueeze(-1), self.tmp_batch_size).squeeze(-1)
-            self.filter_sel.add(this_domain)
+            valid = int(self.domain_sel_mask[this_domain, :].sum().item())
 
-        # if len(self.filter_sel) == self.num_domain:
-        #     self.use_selector = False  # already touch all the domains
+            if not self.opt.use_pretrain_model_warmup or valid >= self.opt.num_buffersamples:
+                self.x_buffer[this_domain] = repeat_data(this_domain_data[selected_indices], self.tmp_batch_size)
+                self.y_buffer[this_domain] = repeat_data(this_domain_label[selected_indices].unsqueeze(-1), self.tmp_batch_size).squeeze(-1)
+                self.domain_buffer[this_domain] = repeat_data(this_domain_domain[selected_indices].unsqueeze(-1), self.tmp_batch_size).squeeze(-1)
+                self.buffer_sel[this_domain, :] = -1
+            else:
+                # todo 
+                # valid = self.domain_sel_mask[this_domain, :].sum().item()
+                
+                valid_idx = selected_indices[:valid]
+
+                # print(this_domain_label[valid_idx].shape, self.y_buffer[this_domain].shape)
+                # assert False
+                self.x_buffer[this_domain] = torch.cat([this_domain_data[valid_idx], self.x_buffer[this_domain][:-valid, :]], dim=0)
+                self.y_buffer[this_domain] = torch.cat([this_domain_label[valid_idx], self.y_buffer[this_domain][:-valid]], dim=0)
+                self.domain_buffer[this_domain] = torch.cat([this_domain_domain[valid_idx], self.domain_buffer[this_domain][:-valid]], dim=0)
+                # print(self.x_buffer[this_domain].shape, self.y_buffer[this_domain].shape, self.domain_buffer[this_domain].shape)
+                # exit(0)
+        
 
     def __train_forward__(self):
         self.u_seq, self.u_mu_seq, self.u_log_var_seq = self.netU(self.x_seq)
@@ -503,6 +507,8 @@ class BaseModel(nn.Module):
 
         # loss_u_concentrate = F.cross_entropy(logits, label, reduction='none')
         # loss_u_concentrate *= flat(self.domain_sel_mask)
+        # print(logits.shape, label.shape, flat(self.domain_sel_mask).shape)
+        # assert False
         return F.cross_entropy(logits, label, ignore_index=-1)
 
     def __optimize_DUZF__(self):
@@ -540,7 +546,7 @@ class BaseModel(nn.Module):
         else:
             loss_p_y_z = -F.nll_loss(
                 flat(f_seq_source).squeeze(), flat(y_seq_source))
-        
+        # todo
         # y_seq_source = self.y_seq[self.domain_mask == 1]
         # f_seq_source = self.f_seq[self.domain_mask == 1]
         # loss_p_y_z = -F.nll_loss(
@@ -690,6 +696,7 @@ class VDI(BaseModel):
             self.netR.load_state_dict(pretrain_model_R)
 
         if self.opt.use_pretrain_model_all:
+            print(f"use_pretrained_all")
             self.netU.load_state_dict(torch.load(self.opt.pretrain_model_all_path + '/netU.pth'))
             self.netUCon.load_state_dict(torch.load(self.opt.pretrain_model_all_path + '/netUCon.pth'))
             self.netZ.load_state_dict(torch.load(self.opt.pretrain_model_all_path + '/netZ.pth'))
@@ -698,7 +705,10 @@ class VDI(BaseModel):
             self.netD.load_state_dict(torch.load(self.opt.pretrain_model_all_path + '/netD.pth'))
             self.netBeta.load_state_dict(torch.load(self.opt.pretrain_model_all_path + '/netBeta.pth'))
             self.netBeta2U.load_state_dict(torch.load(self.opt.pretrain_model_all_path + '/netBeta2U.pth'))
+            # self.x_buffer, self.y_buffer, self.domain_buffer = torch.load(self.opt.pretrain_model_all_path + '/buffer.pth')
+            
         elif self.opt.use_pretrain_model_warmup:
+            print(f"use_pretrained_warmup")
             self.netU.load_state_dict(torch.load(self.opt.pretrain_model_warmup_path + '/netU.pth'))
             self.netUCon.load_state_dict(torch.load(self.opt.pretrain_model_warmup_path + '/netUCon.pth'))
             self.netZ.load_state_dict(torch.load(self.opt.pretrain_model_warmup_path + '/netZ.pth'))
@@ -707,6 +717,7 @@ class VDI(BaseModel):
             self.netD.load_state_dict(torch.load(self.opt.pretrain_model_warmup_path + '/netD.pth'))
             self.netBeta.load_state_dict(torch.load(self.opt.pretrain_model_warmup_path + '/netBeta.pth'))
             self.netBeta2U.load_state_dict(torch.load(self.opt.pretrain_model_warmup_path + '/netBeta2U.pth'))
+            self.x_buffer, self.y_buffer, self.domain_buffer = torch.load(self.opt.pretrain_model_warmup_path + '/buffer.pth')
 
         if self.opt.fix_u_r:
             UZF_parameters = list(self.netZ.parameters()) + list(
@@ -751,6 +762,12 @@ class VDI(BaseModel):
         # for mds(u)
         self.embedding = MDS(n_components=self.opt.beta_dim,
                              dissimilarity='precomputed')
+        
+    def __reset_schedulers__(self):
+        self.lr_scheduler_UZF.set_step(self.opt.total_epoch - self.opt.epoch_per_T * 2)
+        self.lr_scheduler_D.set_step(self.opt.total_epoch - self.opt.epoch_per_T * 2)
+
+        self.lr_schedulers = [self.lr_scheduler_UZF, self.lr_scheduler_D]
 
     def __u_mean__(self, u_seq):
         mu_beta = u_seq.mean(1).detach()
@@ -809,9 +826,11 @@ class VDI(BaseModel):
 
     def __loss_D_dann__(self, d_seq):
         # this is for DANN
-        self.domain_seq[~self.domain_sel_mask.bool()] = -1
-        loss = F.nll_loss(flat(d_seq), flat(self.domain_seq), ignore_index=-1)  # , self.u_seq.mean(1)
-        # loss *= flat(self.domain_sel_mask)
+        this_domain_seq = flat(self.domain_seq)
+        this_domain_seq[~flat(self.domain_sel_mask).bool()] = -1
+        loss = F.nll_loss(flat(d_seq), this_domain_seq, ignore_index=-1)  # , self.u_seq.mean(1)
+        # print(d_seq.shape, this_domain_seq.shape)
+        # assert False
         return loss   
 
     def __loss_D_cida__(self, d_seq):

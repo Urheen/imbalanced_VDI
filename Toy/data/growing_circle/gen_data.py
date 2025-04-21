@@ -31,7 +31,7 @@ def generate_data(mean, std, radius, num):
     m_radius = m_data[:, 0] ** 2 + m_data[:, 1] ** 2
     m_data += mean[None, :]
     m_data = m_data[m_radius <= radius ** 2, :]
-    m_data_return = m_data[:100, :]
+    m_data_return = m_data[:96, :]
     print(m_data_return.shape)
     print('num of data points within radius', radius, ':', m_data_return.shape[0])
     return m_data_return
@@ -67,6 +67,7 @@ def create_toy_data(t=0, radius_large=5):
     d_pkl['data'] = data_all
     d_pkl['label'] = label_all
     d_pkl['domain'] = domain_all
+    d_pkl['radius'] = radius_large
     write_pickle(d_pkl, fname)
 
     if t % 10 == 0:
@@ -88,12 +89,14 @@ def create_toy_data(t=0, radius_large=5):
         plt.legend()
         plt.show()
         plt.savefig(f"./data/growing_circle/test_{t}.png")
+        # if t == 0:
+            # plt.savefig(f"./data/growing_circle/test_{t}.pdf", format='pdf', bbox_inches = 'tight', pad_inches = 0)
         plt.clf()
 
-def create_growing_toy_data(T=101):
+def create_growing_toy_data(T=201):
     boudnary, neg, pos  = [], [], []
     for t in range(T):
-        this_r = np.sin(t / np.pi) * 2 + 5.5
+        this_r = np.sin(t / (np.pi*(20/3)))  + 5.01
         create_toy_data(t=t, radius_large=this_r)
         boudnary.append(this_r)
         neg.append(this_r - 0.5)
@@ -108,6 +111,7 @@ def create_growing_toy_data(T=101):
     plt.title("Growing Circle")
     plt.show()
     plt.savefig(f"./data/growing_circle/test_all.png")
+    # plt.savefig(f"./data/growing_circle/test_all.pdf", format='pdf', bbox_inches = 'tight', pad_inches = 0)
     plt.clf()
 
 # generate label for ellipse-shape data

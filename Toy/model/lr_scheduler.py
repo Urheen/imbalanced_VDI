@@ -93,6 +93,9 @@ class TransformerLRScheduler(LearningRateScheduler):
         self.init_lr = init_lr
         self.update_steps = 0
 
+    def set_step(self, step_in):
+        self.update_steps = step_in
+
     def _decide_stage(self):
         if self.update_steps < self.warmup_steps:
             return 0, self.update_steps

@@ -69,19 +69,13 @@ opt.use_pretrain_model_warmup = True
 
 opt.pretrain_model_all_path = opt.outf
 opt.pretrain_model_warmup_path = opt.outf_warm
-opt.epoch_per_T = 100
+opt.epoch_per_T = 15
+opt.upperbound = False
 
 # online settings, # of domain in each batch
 opt.online = True
-opt.online = False
+# opt.online = False
 
-if opt.online:
-    opt.k = 5
-    opt.use_selector = False
-    opt.num_filtersamples = int(opt.batch_size * 0.1)
-    opt.imbal_lambda = 10  # 可调整 λ 以更好控制分布形态
-else:
-    opt.k = opt.num_domain
-    opt.use_selector = False
-    opt.num_filtersamples = 0
-    opt.imbal_lambda = 10  # 可调整 λ 以更好控制分布形态
+opt.k = 15
+opt.use_buffer = True
+opt.num_buffersamples = 10
