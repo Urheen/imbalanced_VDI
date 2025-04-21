@@ -283,6 +283,7 @@ else:
     test_model(ref_opt, test_loader)
 
 
+
 print(f"Training is COMPLETE.")
 plt.plot(np.arange(len(test_results)), test_results)
 plt.xlabel('Time round')
