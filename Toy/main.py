@@ -161,8 +161,8 @@ plt.clf()
 # domain_weights = None
 
 alpha = np.ones(opt.num_domain)
-rng_dirichlet = np.random.default_rng(seed=42)
-rng_choice = np.random.default_rng(seed=42)
+rng_dirichlet = np.random.default_rng(seed=49)
+rng_choice = np.random.default_rng(seed=49)
 from copy import deepcopy
 ref_opt = deepcopy(opt)
 ref_opt.use_pretrain_model_all = True
@@ -200,11 +200,19 @@ if opt.use_pretrain_model_warmup:
         domain_weights = dirichlet_weights
 
         if not opt.upperbound:
-            domain_sampled = rng_choice.choice(opt.num_domain, size=opt.k, replace=False, p=domain_weights)
+            domain_sampled = rng_choice.choice(opt.num_domain, size=opt.k, replace=False, p=np.ones(opt.num_domain)/opt.num_domain)
             domain_sel = np.sort(domain_sampled).tolist()
             re_norm_log = domain_weights[domain_sel]
             domain_weight_renorm = re_norm_log / np.sum(re_norm_log)
-            # domain_weight_renorm = np.ones_like(domain_sel)
+            domain_weight_renorm *= opt.batch_size / domain_weight_renorm.max()
+            domain_weight_renorm = np.clip(domain_weight_renorm.astype(int), a_min=3, a_max=16)
+            domain_weight_renorm = sorted(domain_weight_renorm)
+            plt.plot(np.arange(len(domain_weight_renorm)), domain_weight_renorm)
+            plt.show()
+            plt.savefig('./test_imbal.png')
+            plt.clf()
+            assert False
+            domain_weight_renorm = np.ones_like(domain_sel)
         else:
             domain_sel = np.arange(opt.num_domain).tolist()
             domain_weight_renorm = np.ones_like(domain_sel)

@@ -12,6 +12,8 @@ import ot
 from sklearn.manifold import MDS
 import json
 import random
+from scipy.ndimage import gaussian_filter1d
+from scipy.signal.windows import triang
 # const
 LARGE_NUM = 1e9
 
@@ -41,6 +43,24 @@ def write_pickle(data, name):
 def repeat_data(data, expand_size):
     repeat_times = (expand_size + data.shape[0] - 1) // data.shape[0]
     return data.repeat(repeat_times, 1)[:expand_size]
+
+
+@staticmethod
+def get_kernel_window(kernel, ks, sigma):
+    assert kernel in ['gaussian', 'triang', 'laplace']
+    half_ks = (ks - 1) // 2
+    if kernel == 'gaussian':
+        base_kernel = [0.] * half_ks + [1.] + [0.] * half_ks
+        base_kernel = np.array(base_kernel, dtype=np.float32)
+        kernel_window = gaussian_filter1d(base_kernel, sigma=sigma) / sum(gaussian_filter1d(base_kernel, sigma=sigma))
+    elif kernel == 'triang':
+        kernel_window = triang(ks) / sum(triang(ks))
+    else:
+        laplace = lambda x: np.exp(-abs(x) / sigma) / (2. * sigma)
+        kernel_window = list(map(laplace, np.arange(-half_ks, half_ks + 1))) / sum(map(laplace, np.arange(-half_ks, half_ks + 1)))
+
+    print(f'Using FDS: [{kernel.upper()}] ({ks}/{sigma})')
+    return torch.tensor(kernel_window, dtype=torch.float32).cuda()
 
 # =========================
 # the base model
@@ -393,7 +413,24 @@ class BaseModel(nn.Module):
                 self.domain_buffer[this_domain] = torch.cat([this_domain_domain[valid_idx], self.domain_buffer[this_domain][:-valid]], dim=0)
                 # print(self.x_buffer[this_domain].shape, self.y_buffer[this_domain].shape, self.domain_buffer[this_domain].shape)
                 # exit(0)
-        
+    
+    def __reweight_domain_index__(self):
+        # kernel_window = get_kernel_window(self.opt.kernel_type, self.opt.kernel_ks, self.opt.kernel_sigma)
+        # half_ks = (self.opt.ks - 1) // 2
+        freq = self.domain_sel_mask.sum(dim=1) / self.opt.batch_size
+        # print(freq.shape)
+        # print(freq)
+        freq_weight = 1. / freq
+        # print(freq_weight, self.domain_sel)
+        for idx, elem in enumerate(range(self.opt.num_domain)):
+            if elem in self.domain_sel:
+                continue
+            freq_weight[elem] *= (self.opt.num_buffersamples / self.opt.batch_size)
+        # print(freq_weight)
+        # assert False
+        print(self.beta_seq.shape, freq_weight.shape)
+        self.beta_seq *= freq_weight.unsqueeze(1)
+        pass
 
     def __train_forward__(self):
         self.u_seq, self.u_mu_seq, self.u_log_var_seq = self.netU(self.x_seq)
@@ -408,7 +445,10 @@ class BaseModel(nn.Module):
             self.tmp_beta_seq = self.generate_beta(self.u_seq)
             self.beta_seq, self.beta_log_var_seq = self.netBeta(
                 self.tmp_beta_seq, self.tmp_beta_seq)
-
+        if self.train:
+            if self.opt.imbal:
+                self.__reweight_domain_index__()
+        
         self.beta_U_seq = self.netBeta2U(self.beta_seq)
 
         self.q_z_seq, self.q_z_mu_seq, self.q_z_log_var_seq, self.p_z_seq, self.p_z_mu_seq, self.p_z_log_var_seq, = self.netZ(
