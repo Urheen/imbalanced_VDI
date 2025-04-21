@@ -241,7 +241,7 @@ else:
         if epoch < opt.warm_epoch:
             dataloader, test_loader, _, mu, std = get_loader(opt, epoch, None, None)
             warmup = True
-            dirichlet_weights = rng_numpy.dirichlet(alpha)
+            dirichlet_weights = rng_dirichlet.dirichlet(alpha)
             domain_weights = np.ones_like(dirichlet_weights)
             domain_weights = None
         elif epoch == opt.warm_epoch:
@@ -251,7 +251,7 @@ else:
 
             dataloader, test_loader, _, _, _ = get_loader(opt, epoch, mu, std)
             warmup = False
-            dirichlet_weights = rng_numpy.dirichlet(alpha)
+            dirichlet_weights = rng_dirichlet.dirichlet(alpha)
             domain_weights = dirichlet_weights
             domain_weights = None
 
