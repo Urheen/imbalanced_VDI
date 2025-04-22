@@ -44,24 +44,6 @@ def repeat_data(data, expand_size):
     repeat_times = (expand_size + data.shape[0] - 1) // data.shape[0]
     return data.repeat(repeat_times, 1)[:expand_size]
 
-
-@staticmethod
-def get_kernel_window(kernel, ks, sigma):
-    assert kernel in ['gaussian', 'triang', 'laplace']
-    half_ks = (ks - 1) // 2
-    if kernel == 'gaussian':
-        base_kernel = [0.] * half_ks + [1.] + [0.] * half_ks
-        base_kernel = np.array(base_kernel, dtype=np.float32)
-        kernel_window = gaussian_filter1d(base_kernel, sigma=sigma) / sum(gaussian_filter1d(base_kernel, sigma=sigma))
-    elif kernel == 'triang':
-        kernel_window = triang(ks) / sum(triang(ks))
-    else:
-        laplace = lambda x: np.exp(-abs(x) / sigma) / (2. * sigma)
-        kernel_window = list(map(laplace, np.arange(-half_ks, half_ks + 1))) / sum(map(laplace, np.arange(-half_ks, half_ks + 1)))
-
-    print(f'Using FDS: [{kernel.upper()}] ({ks}/{sigma})')
-    return torch.tensor(kernel_window, dtype=torch.float32).cuda()
-
 # =========================
 # the base model
 class BaseModel(nn.Module):
@@ -137,7 +119,7 @@ class BaseModel(nn.Module):
             self.domain_sel = domain_sel
         else:
             self.domain_sel = np.arange(self.opt.num_domain).tolist()
-            domain_weight_renorm = np.ones_like(self.domain_sel)
+            domain_weight_renorm = np.ones_like(self.domain_sel) * self.opt.batch_size
         # self.domain_sel = np.arange(self.opt.num_domain).tolist()
         count = 0
         for data in dataloader:
@@ -348,12 +330,8 @@ class BaseModel(nn.Module):
             self.domain_seq[elem] = self.domain_seq_tmp[elem]
 
             if train:
-                curr_weight = domain_weight_renorm[idx]
-                curr_sample = min(self.tmp_batch_size, int(curr_weight * self.tmp_batch_size)+3)
-                # print(self.domain_sel_mask[elem, :].shape, self.domain_sel[idx], curr_sample)
-                # print(f"{self.domain_sel[idx]}, current mask is {self.domain_sel_mask[elem, :]}")
+                curr_sample = domain_weight_renorm[idx]
                 self.domain_sel_mask[elem, curr_sample:] = 0.0
-                # print(f"{self.domain_sel[idx]}, current mask is {self.domain_sel_mask[elem, :]}")
                 
         # if train:
         #     print(self.domain_sel)
@@ -415,22 +393,26 @@ class BaseModel(nn.Module):
                 # exit(0)
     
     def __reweight_domain_index__(self):
-        # kernel_window = get_kernel_window(self.opt.kernel_type, self.opt.kernel_ks, self.opt.kernel_sigma)
-        # half_ks = (self.opt.ks - 1) // 2
-        freq = self.domain_sel_mask.sum(dim=1) / self.opt.batch_size
-        # print(freq.shape)
-        # print(freq)
-        freq_weight = 1. / freq
+        domain_idx = self.beta_seq.detach()
+        val = self.domain_sel_mask.sum(dim=1)
+        self.reweights = torch.zeros((domain_idx.shape[0], 1))
+        for idx in range(domain_idx.shape[0]):
+            dists = torch.cdist(domain_idx[idx].unsqueeze(0), domain_idx, p=2)
+            # print(dists.shape, dists)
+            w = torch.exp(- dists / (2. * self.opt.kernel_sigmaSQ)) / np.sqrt(2 * torch.pi * self.opt.kernel_sigmaSQ)
+            # w = torch.exp(- dists ) 
+            # print(w.shape, w)
+            # assert False
+            self.reweights[idx] = (w * val).sum() / w.sum()
+        # print(reweights, 1./reweights)
+        # assert False
         # print(freq_weight, self.domain_sel)
-        for idx, elem in enumerate(range(self.opt.num_domain)):
-            if elem in self.domain_sel:
-                continue
-            freq_weight[elem] *= (self.opt.num_buffersamples / self.opt.batch_size)
+        # for idx, elem in enumerate(range(self.opt.num_domain)):
+        #     if elem in self.domain_sel:
+        #         continue
+        #     reweights[elem] *= (self.opt.num_buffersamples / self.opt.batch_size)
         # print(freq_weight)
         # assert False
-        print(self.beta_seq.shape, freq_weight.shape)
-        self.beta_seq *= freq_weight.unsqueeze(1)
-        pass
 
     def __train_forward__(self):
         self.u_seq, self.u_mu_seq, self.u_log_var_seq = self.netU(self.x_seq)
@@ -448,6 +430,8 @@ class BaseModel(nn.Module):
         if self.train:
             if self.opt.imbal:
                 self.__reweight_domain_index__()
+            else:
+                self.reweights = torch.ones((self.num_domain, 1)).to(self.device)
         
         self.beta_U_seq = self.netBeta2U(self.beta_seq)
 
@@ -549,7 +533,11 @@ class BaseModel(nn.Module):
         # loss_u_concentrate *= flat(self.domain_sel_mask)
         # print(logits.shape, label.shape, flat(self.domain_sel_mask).shape)
         # assert False
-        return F.cross_entropy(logits, label, ignore_index=-1)
+        loss = F.cross_entropy(logits, label, reduction='none', ignore_index=-1)
+        mask = (label != -1)
+        loss = (loss * mask.float()).sum() / mask.float().sum()
+
+        return loss
 
     def __optimize_DUZF__(self):
         self.train()
@@ -559,12 +547,16 @@ class BaseModel(nn.Module):
         # - E_q[log q(u|x)]
         # u is multi-dimensional
         # loss_q_u_x = torch.mean((0.5 * flat(self.u_log_var_seq)).sum(1), dim=0)
-        loss_q_u_x = ((0.5 * flat(self.u_log_var_seq)).sum(1) * flat(self.domain_sel_mask)).mean()
+        loss_q_u_x = (0.5 * flat(self.u_log_var_seq)).sum(1) * flat(self.domain_sel_mask)
+        loss_q_u_x = loss_q_u_x.reshape(self.num_domain, -1) * self.reweights
+        loss_q_u_x = torch.mean(loss_q_u_x)
 
         # - E_q[log q(z|x,u)]
         # remove all the losses about log var and use 1 as var
         # loss_q_z_x_u = torch.mean((0.5 * flat(self.q_z_log_var_seq)).sum(1),dim=0)
-        loss_q_z_x_u = ((0.5 * flat(self.q_z_log_var_seq)).sum(1) * flat(self.domain_sel_mask)).mean()
+        loss_q_z_x_u = (0.5 * flat(self.q_z_log_var_seq)).sum(1) * flat(self.domain_sel_mask)
+        loss_q_z_x_u = loss_q_z_x_u.reshape(self.num_domain, -1) * self.reweights
+        loss_q_z_x_u = torch.mean(loss_q_z_x_u)
 
         # E_q[log p(z|x,u)]
         # first one is for normal
@@ -572,7 +564,9 @@ class BaseModel(nn.Module):
             torch.exp(flat(self.q_z_log_var_seq)) +
             (flat(self.q_z_mu_seq) - flat(self.p_z_mu_seq))**2) / flat(
                 torch.exp(self.p_z_log_var_seq))
-        loss_p_z_x_u = (loss_p_z_x_u.sum(1) * flat(self.domain_sel_mask)).mean()
+        loss_p_z_x_u = loss_p_z_x_u.sum(1) * flat(self.domain_sel_mask)
+        loss_p_z_x_u = loss_p_z_x_u.reshape(self.num_domain, -1) * self.reweights
+        loss_p_z_x_u = torch.mean(loss_p_z_x_u)
 
 
         domain_valid = self.domain_sel_mask.sum(dim=1).bool()
@@ -585,7 +579,8 @@ class BaseModel(nn.Module):
             loss_p_y_z = torch.tensor([0]).to(y_seq_source.device)
         else:
             loss_p_y_z = -F.nll_loss(
-                flat(f_seq_source).squeeze(), flat(y_seq_source))
+                flat(f_seq_source).squeeze(), flat(y_seq_source), reduction='none')
+            loss_p_y_z = loss_p_y_z.mean()
         # todo
         # y_seq_source = self.y_seq[self.domain_mask == 1]
         # f_seq_source = self.f_seq[self.domain_mask == 1]
@@ -600,7 +595,9 @@ class BaseModel(nn.Module):
         #     exit(0)
         var_beta = torch.exp(self.beta_log_var_seq) 
         # To reproduce the exact result of our experiment, use the following line to replace the loss_beta_alpha:
-        loss_beta_alpha = -((var_beta**2).sum(dim=1) * domain_valid).mean()
+        loss_beta_alpha = (var_beta**2).sum(dim=1) * domain_valid  # [30]
+        loss_beta_alpha = loss_beta_alpha.unsqueeze(1) * self.reweights
+        loss_beta_alpha = - torch.mean(loss_beta_alpha)
         # Actually the previous line is wrong because based on our formula, it should be var_beta, not var_beta**2.
         # However, all our parameter tunning is based on the previous one. Thus, to ensure that you can reproduce our results, please use the previous line.
         # The correct line should be: 
@@ -613,8 +610,9 @@ class BaseModel(nn.Module):
         beta_t = self.beta_U_seq.unsqueeze(dim=1).expand(
             -1, self.tmp_batch_size, -1) 
         # now beta_t is domain x batch x domain idx dim
-        # print(beta_t.shape)  # [15,32,4]
-        loss_p_u_beta = ((self.u_seq - beta_t)**2).sum(2) * self.domain_sel_mask
+        # print(beta_t.shape) 
+        loss_p_u_beta = ((self.u_seq - beta_t)**2).sum(2) * self.domain_sel_mask  # [30, 16]
+        loss_p_u_beta *= self.reweights
         loss_p_u_beta = -torch.mean(loss_p_u_beta) 
 
         # concentrate loss
@@ -622,6 +620,7 @@ class BaseModel(nn.Module):
 
         # reconstruction loss (p(x|u))
         loss_p_x_u = ((flat(self.x_seq) - flat(self.r_x_seq))**2).sum(1) * flat(self.domain_sel_mask)
+        loss_p_x_u = loss_p_x_u.reshape(self.num_domain, -1) * self.reweights
         loss_p_x_u = -torch.mean(loss_p_x_u) 
 
         # gan loss (adversarial loss)
@@ -868,10 +867,22 @@ class VDI(BaseModel):
         # this is for DANN
         this_domain_seq = flat(self.domain_seq)
         this_domain_seq[~flat(self.domain_sel_mask).bool()] = -1
-        loss = F.nll_loss(flat(d_seq), this_domain_seq, ignore_index=-1)  # , self.u_seq.mean(1)
+        # loss = F.nll_loss(flat(d_seq), this_domain_seq, ignore_index=-1)  # , self.u_seq.mean(1)
+        # return loss
+        loss = F.nll_loss(flat(d_seq), this_domain_seq, reduction='none', ignore_index=-1)
+        mask = (this_domain_seq != -1)
+        loss = (loss * mask.float()).sum() / mask.float().sum()
+
+        # tmp_loss = F.nll_loss(flat(d_seq), this_domain_seq, ignore_index=-1)
+
+        # if loss != tmp_loss:
+        #     print(loss, mask.float().sum(), tmp_loss)
+        # assert False
+        return loss
+        
         # print(d_seq.shape, this_domain_seq.shape)
         # assert False
-        return loss   
+           
 
     def __loss_D_cida__(self, d_seq):
         # this is for CIDA

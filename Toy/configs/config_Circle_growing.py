@@ -76,10 +76,8 @@ opt.upperbound = False
 opt.online = True
 # opt.online = False
 
-opt.k = 5
+opt.k = 15
 opt.use_buffer = True
-opt.num_buffersamples = 10
+opt.num_buffersamples = 5
 opt.imbal = False
-opt.kernel_type = 'None'
-opt.kernel_ks = 5
-opt.kernel_sigma = 2
+opt.kernel_sigmaSQ = 0.1

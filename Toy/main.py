@@ -206,16 +206,16 @@ if opt.use_pretrain_model_warmup:
             domain_weight_renorm = re_norm_log / np.sum(re_norm_log)
             domain_weight_renorm *= opt.batch_size / domain_weight_renorm.max()
             domain_weight_renorm = np.clip(domain_weight_renorm.astype(int), a_min=3, a_max=16)
-            domain_weight_renorm = sorted(domain_weight_renorm)
-            plt.plot(np.arange(len(domain_weight_renorm)), domain_weight_renorm)
-            plt.show()
-            plt.savefig('./test_imbal.png')
-            plt.clf()
-            assert False
-            domain_weight_renorm = np.ones_like(domain_sel)
+            # domain_weight_renorm = sorted(domain_weight_renorm)
+            # plt.plot(np.arange(len(domain_weight_renorm)), domain_weight_renorm)
+            # plt.show()
+            # plt.savefig('./test_imbal.png')
+            # plt.clf()
+            # assert False
+            # domain_weight_renorm = np.ones_like(domain_sel)
         else:
             domain_sel = np.arange(opt.num_domain).tolist()
-            domain_weight_renorm = np.ones_like(domain_sel)
+            domain_weight_renorm = np.ones_like(domain_sel) * opt.batch_size
 
         # domain_weights = None
 
