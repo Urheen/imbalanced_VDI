@@ -7,14 +7,15 @@ opt.data_src = "data/"
 opt.data_path = opt.data_src + "feature_resnet18_new_data.pkl"
 
 opt.src_domain_idx = [0]
-opt.tgt_domain_idx = list(set(range(0, 30)) - set(opt.src_domain_idx))
+opt.tgt_domain_idx = list(set(range(0, 5)) - set(opt.src_domain_idx))
 
 opt.num_source = len(opt.src_domain_idx)
 opt.num_target = len(opt.tgt_domain_idx)
 opt.num_domain = opt.num_source + opt.num_target
 
 opt.all_domain_idx = opt.src_domain_idx + opt.tgt_domain_idx
-
+opt.T = 6
+opt.all_domain_idx_total = list(set(range(opt.num_domain * opt.T)))
 # wheather shuffle data
 opt.shuffle = True
 
@@ -22,7 +23,6 @@ opt.use_pretrain_R = False
 # opt.pretrain_R_path = "data/netR_8_434.pth"
 # opt.pretrain_U_path = "data/netU_8_434.pth"
 opt.fix_u_r = False
-opt.use_pretrain_model_all = False
 
 opt.d_loss_type = "ADDA_loss"  # "DANN_loss_mean" # "CIDA_loss" # "GRDA_loss" # "DANN_loss"
 
@@ -40,18 +40,22 @@ opt.final_lr = 1e-8
 opt.warmup_steps = 20
 
 opt.seed = 2333
-opt.num_epoch = 500
+opt.num_epoch = 6
+opt.warm_epoch = 500
+opt.total_epoch = 500
 opt.batch_size = 16
 
 opt.use_visdom = False  # True
 opt.visdom_port = 2000
 tmp_time = localtime()
 opt.outf = "result_save/{}".format(strftime("%Y-%m-%d %H:%M:%S", tmp_time))
+opt.outf_warm = f"warmup"
+
 opt.save_interval = 100
 opt.test_interval = 20
 
 opt.device = "cuda"
-opt.gpu_device = "5"
+opt.gpu_device = "1"
 opt.gamma = 100
 opt.beta1 = 0.9
 opt.weight_decay = 5e-4
@@ -71,3 +75,21 @@ opt.sample_v = 20
 
 # how many nodes to save
 opt.save_sample = 100
+
+opt.use_pretrain_model_all = False
+opt.use_pretrain_model_warmup = True
+
+opt.pretrain_model_all_path = opt.outf
+opt.pretrain_model_warmup_path = opt.outf_warm
+opt.epoch_per_T = 200
+opt.upperbound = False
+
+# online settings, # of domain in each batch
+opt.online = True
+# opt.online = False
+
+opt.k = 3
+opt.use_buffer = False
+opt.num_buffersamples = 3
+opt.imbal = False
+opt.kernel_sigmaSQ = 0.1
