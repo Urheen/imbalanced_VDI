@@ -79,7 +79,8 @@ def get_loader(opt, t, data_mean, data_std):
     
     dataset = SeqToyDataset(datasets, size=len(datasets[0]))  # mix sub dataset to a large one
     dataloader = DataLoader(dataset=dataset, batch_size=opt.batch_size, shuffle=True)
-    test_loader = DataLoader(dataset=dataset, batch_size=opt.batch_size)
+    dataset_te = SeqToyDataset(datasets, size=len(datasets[0]))  # mix sub dataset to a large one
+    test_loader = DataLoader(dataset=dataset_te, batch_size=opt.batch_size, shuffle=False)
 
     return dataloader, test_loader, radius, data_mean, data_std
 
@@ -166,6 +167,7 @@ rng_choice = np.random.default_rng(seed=49)
 from copy import deepcopy
 ref_opt = deepcopy(opt)
 ref_opt.use_pretrain_model_all = True
+# ref_opt.use_pretrain_model_warmup = False
 # dirichlet_weights = rng_numpy.dirichlet(alpha)
 # domain_weights = dirichlet_weights
 
@@ -183,7 +185,7 @@ _, test_loader, r, mu, std = get_loader(opt, -1, None, None)
 # test_model(opt.warm_epoch, ref_opt, test_loader)
 # exit(0)
 
-test_results = []
+prev_test_res, post_test_res = [], []
 from tqdm import tqdm
 print(opt.epoch_per_T)
 # train without warmup
@@ -205,7 +207,7 @@ if opt.use_pretrain_model_warmup:
             re_norm_log = domain_weights[domain_sel]
             domain_weight_renorm = re_norm_log / np.sum(re_norm_log)
             domain_weight_renorm *= opt.batch_size / domain_weight_renorm.max()
-            domain_weight_renorm = np.clip(domain_weight_renorm.astype(int), a_min=3, a_max=16)
+            domain_weight_renorm = np.clip(domain_weight_renorm.astype(int), a_min=opt.num_buffersamples, a_max=16)
             # domain_weight_renorm = sorted(domain_weight_renorm)
             # plt.plot(np.arange(len(domain_weight_renorm)), domain_weight_renorm)
             # plt.show()
@@ -217,17 +219,11 @@ if opt.use_pretrain_model_warmup:
             domain_sel = np.arange(opt.num_domain).tolist()
             domain_weight_renorm = np.ones_like(domain_sel) * opt.batch_size
 
-        # domain_weights = None
-
-        # print(f"Warm up training results at first time round.")
-        # test_model(epoch, ref_opt, test_loader)
-        # print(f"WARMUP training is COMPLETE.")
-
-        # test_flag = epoch == 0 or (epoch + 1) % opt.test_interval == 0 or (epoch + 1) == opt.warm_epoch + opt.num_epoch
         test_flag = True
         if test_flag:
             print(f"Prior training for radius {r}.")
-            test_model(epoch, ref_opt, test_loader)
+            testacc = test_model(epoch, ref_opt, test_loader)
+            prev_test_res.append(testacc)
         # assert False
 
         for tt in range(opt.epoch_per_T):
@@ -238,20 +234,17 @@ if opt.use_pretrain_model_warmup:
         if test_flag:
             print(f"Post training for radius {r}.")
             testacc = test_model(epoch, ref_opt, test_loader)
-            test_results.append(testacc)
+            post_test_res.append(testacc)
     _, test_loader, r, _, _ = get_loader(opt, opt.num_epoch, mu, std)
     print(f"Final Test on the last dataset for radius {r}.")
     testacc = test_model(opt.num_epoch, ref_opt, test_loader)
-    test_results.append(testacc)
+    prev_test_res.append(testacc)
 else:
     # train with warmup
-    for epoch in range(opt.warm_epoch + opt.num_epoch):
+    for epoch in range(opt.warm_epoch + 1):
         if epoch < opt.warm_epoch:
             dataloader, test_loader, _, mu, std = get_loader(opt, epoch, None, None)
             warmup = True
-            dirichlet_weights = rng_dirichlet.dirichlet(alpha)
-            domain_weights = np.ones_like(dirichlet_weights)
-            domain_weights = None
         elif epoch == opt.warm_epoch:
             model.save()  # save warm up model
             print(f"Warm up training results.")
@@ -259,15 +252,14 @@ else:
 
             dataloader, test_loader, _, _, _ = get_loader(opt, epoch, mu, std)
             warmup = False
-            dirichlet_weights = rng_dirichlet.dirichlet(alpha)
-            domain_weights = dirichlet_weights
-            domain_weights = None
 
             print(f"Warm up training results at first time round.")
             test_model(epoch, ref_opt, test_loader)
+            test_model(epoch, ref_opt, dataloader)
+            test_model(epoch, ref_opt, dataloader)
+            test_model(epoch, ref_opt, dataloader)
             print(f"WARMUP training is COMPLETE.")
             print(model.x_buffer[0].shape)
-            assert False
 
         if warmup:
             model.learn(epoch, dataloader, save_buffer_data=(epoch == opt.warm_epoch - 1))
@@ -275,34 +267,40 @@ else:
                 # continue
                 model.save(True)
         else:
-            test_flag = (epoch + 1) % opt.test_interval == 0 or (epoch + 1) == opt.warm_epoch + opt.num_epoch
-            if test_flag:
-                test_model(epoch, ref_opt, test_loader)
-
-            for _ in range(100):
-                model.learn(epoch, dataloader)
-
-            if test_flag:
-                # model.save()
-                test_model(epoch, ref_opt, test_loader)
-    # last
-    dataloader, test_loader, _, _, _ = get_loader(opt, opt.warm_epoch + opt.num_epoch, mu, std)
-    print(f"Final Test on the last dataset.")
-    test_model(ref_opt, test_loader)
+            break
 
 
-
+# print(model.x_buffer[0].shape, model.last_beta.shape)
 print(f"Training is COMPLETE.")
-plt.plot(np.arange(len(test_results)), test_results)
-plt.xlabel('Time round')
+prev_test_res = prev_test_res[1:]
+assert len(prev_test_res) == len(post_test_res)
+plt.plot(np.arange(len(prev_test_res)), prev_test_res)
+plt.xlabel('Results for Next Round.')
 plt.ylabel('Accuracy')
 plt.show()
-plt.savefig(f"./growing_new_{opt.epoch_per_T}.png")
+plt.savefig(f"./res_figure/growing_NEXT_{opt.epoch_per_T}.png")
 plt.clf()
-avg_test = sum(test_results) / len(test_results)
-print(f"average test accuracy is {avg_test}")
+
+avg_prev = sum(prev_test_res) / len(prev_test_res)
+print(f"NEXT round average test accuracy is {avg_prev}")
 for i in range(0, opt.num_epoch, 20):
-    tmp_test_res = test_results[i:i+20]
+    tmp_test_res = prev_test_res[i:i+20]
     tmp_avg_test = sum(tmp_test_res) / len(tmp_test_res)
-    print(f"average test accuracy is {tmp_avg_test} for region [{i}: {i+20})")
-print('h424', opt.epoch_per_T, opt.k, f"Total: {time.time()-start_time}s")
+    print(f"NEXT round average test accuracy is {tmp_avg_test} for region [{i}: {i+20})")
+
+plt.plot(np.arange(len(post_test_res)), post_test_res)
+plt.xlabel('Results for This Round.')
+plt.ylabel('Accuracy')
+plt.show()
+plt.savefig(f"./res_figure/growing_POST_{opt.epoch_per_T}.png")
+plt.clf()
+
+avg_post = sum(post_test_res) / len(post_test_res)
+print(f"THIS round average test accuracy is {avg_post}")
+for i in range(0, opt.num_epoch, 20):
+    tmp_test_res = post_test_res[i:i+20]
+    tmp_avg_test = sum(tmp_test_res) / len(tmp_test_res)
+    print(f"THIS round average test accuracy is {tmp_avg_test} for region [{i}: {i+20})")
+
+
+print('h424', opt.seed, opt.epoch_per_T, opt.k, f"Total: {time.time()-start_time}s")

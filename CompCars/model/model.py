@@ -378,12 +378,13 @@ class BaseModel(nn.Module):
             keys = random_values ** (1 / density)  # Weighted Random Sampling
         
             selected_indices = np.argsort(-keys)[:self.opt.num_buffersamples]
-            selected_indices = []
-            for elem in np.argsort(-keys):
-                if self.domain_sel_mask[this_domain, elem]:
-                    selected_indices.append(elem)
-                    if len(selected_indices) == self.opt.num_buffersamples:
-                        break
+            # selected_indices = []
+            # for elem in np.argsort(-keys):
+            #     if self.domain_sel_mask[this_domain, elem]:
+            #         selected_indices.append(elem)
+            #         if len(selected_indices) == self.opt.num_buffersamples:
+            #             break
+            # assert len(selected_indices) == self.opt.num_buffersamples
 
             valid = int(self.domain_sel_mask[this_domain, :].sum().item())
 
@@ -657,7 +658,7 @@ class BaseModel(nn.Module):
                 adda_reweight = self.reweights[self.domain_mask == 0].unsqueeze(-1)
                 # print(d_seq_target.shape, adda_reweight.shape)
                 # assert False
-                loss_E_gan = -torch.log(d_seq_target * adda_reweight + 1e-10).mean()
+                loss_E_gan = (-torch.log(d_seq_target + 1e-10) * adda_reweight).mean()
             else:
                 loss_E_gan = -self.loss_D
         else:

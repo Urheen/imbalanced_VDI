@@ -49,7 +49,7 @@ opt.save_interval = 50
 opt.test_interval = 10  # 20
 
 opt.device = "cuda"
-opt.gpu_device = "0"
+opt.gpu_device = "1"
 opt.gamma = 100
 opt.beta1 = 0.9
 opt.weight_decay = 5e-4
@@ -76,8 +76,8 @@ opt.upperbound = False
 opt.online = True
 # opt.online = False
 
-opt.k = 15
+opt.k = 10
 opt.use_buffer = True
-opt.num_buffersamples = 5
-opt.imbal = False
+opt.num_buffersamples = 3
+opt.imbal = True
 opt.kernel_sigmaSQ = 0.1

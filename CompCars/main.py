@@ -51,8 +51,8 @@ dataloader = FeatureDataloader(opt)
 # exit(0)
 
 alpha = np.ones(opt.num_domain)
-rng_dirichlet = np.random.default_rng(seed=49)
-rng_choice = np.random.default_rng(seed=49)
+rng_dirichlet = np.random.default_rng(seed=94)
+rng_choice = np.random.default_rng(seed=94)
 from copy import deepcopy
 ref_opt = deepcopy(opt)
 ref_opt.use_pretrain_model_all = True
@@ -87,15 +87,15 @@ if opt.use_pretrain_model_warmup:
             dirichlet_weights = rng_dirichlet.dirichlet(alpha)
             domain_weights = dirichlet_weights
             if opt.k > 1:
-                domain_sampled = rng_choice.choice(opt.num_domain, size=opt.k-1, replace=False, p=np.ones(opt.num_domain)/opt.num_domain)
-                domain_sel = [opt.num_domain] + np.sort(domain_sampled).tolist()
-                domain_sel = [elem % opt.num_domain for elem in domain_sel]
+                domain_sampled = rng_choice.choice(np.arange(1, opt.num_domain), size=opt.k-1, replace=False, p=np.ones((opt.num_domain-1))/(opt.num_domain-1))
+                domain_sel = [0] + np.sort(domain_sampled).tolist()
+                # domain_sel = [elem % opt.num_domain for elem in domain_sel]
             else:
                 domain_sel = [0]
             re_norm_log = domain_weights[domain_sel]
             domain_weight_renorm = re_norm_log / np.sum(re_norm_log)
             domain_weight_renorm *= opt.batch_size / domain_weight_renorm.max()
-            domain_weight_renorm = np.clip(domain_weight_renorm.astype(int), a_min=3, a_max=opt.batch_size)
+            domain_weight_renorm = np.clip(domain_weight_renorm.astype(int), a_min=opt.num_buffersamples, a_max=opt.batch_size)
             assert 0 in domain_sel, "Source domain not in selection"
         else:
             domain_sel = np.arange(opt.num_domain).tolist()
@@ -133,6 +133,10 @@ else:
             warmup = False
 
             print(f"Warm up training results at first time round.")
+            test_model(epoch, ref_opt, dataloader, t)
+            test_model(epoch, ref_opt, dataloader, t)
+            test_model(epoch, ref_opt, dataloader, t)
+            test_model(epoch, ref_opt, dataloader, t)
             test_model(epoch, ref_opt, dataloader, t)
             test_model(epoch, ref_opt, dataloader, t)
             test_model(epoch, ref_opt, dataloader, t)

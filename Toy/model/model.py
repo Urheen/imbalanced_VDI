@@ -11,9 +11,6 @@ from model.lr_scheduler import TransformerLRScheduler
 import ot
 from sklearn.manifold import MDS
 import json
-import random
-from scipy.ndimage import gaussian_filter1d
-from scipy.signal.windows import triang
 # const
 LARGE_NUM = 1e9
 
@@ -62,7 +59,6 @@ class BaseModel(nn.Module):
             self.test_pane_init = False
 
         self.num_domain = opt.num_domain
-        self.rng_numpy = np.random.default_rng(seed=opt.seed)
 
         self.outf = self.opt.outf
         self.train_log = self.outf + "/loss.log"
@@ -93,6 +89,7 @@ class BaseModel(nn.Module):
         self.x_buffer = {}
         self.y_buffer = {}
         self.domain_buffer = {}
+        self.last_beta, self.last_beta_log_var_seq = None, None
         self.buffer_sel = torch.ones((self.num_domain, self.opt.batch_size)).to(self.device) * -1.
         self.use_buffer = self.opt.use_buffer
 
@@ -134,12 +131,23 @@ class BaseModel(nn.Module):
 
             self.new_u.append(self.u_seq)
 
-            if self.opt.use_buffer and save_buffer_data:
+            if save_buffer_data:
+                if self.tmp_batch_size == self.opt.batch_size:
                     self.__buffer_input__()
 
         self.new_u = self.my_cat(self.new_u)
         self.use_beta_seq = self.generate_beta(self.new_u)
         # self.use_beta_seq = None
+
+        # if save_buffer_data:
+        #     if self.opt.imbal or not self.opt.use_pretrain_model_warmup:
+        #         self.eval()
+        #         with torch.no_grad():
+        #             self.last_beta, self.last_beta_log_var_seq = self.netBeta(
+        #                 self.use_beta_seq.clone(), self.use_beta_seq.clone())
+        #             self.last_beta = self.last_beta.detach()
+        #             self.last_beta_log_var_seq = self.last_beta_log_var_seq.detach()
+            
 
         for key, _ in new_loss_values.items():
             loss_values[key] /= count
@@ -164,7 +172,7 @@ class BaseModel(nn.Module):
         else:
             self.nan_flag = False
 
-    def test(self, epoch, dataloader, verbose=False):
+    def test(self, epoch, dataloader):
         self.eval()
         self.epoch = epoch
 
@@ -186,8 +194,10 @@ class BaseModel(nn.Module):
             # forward
             with torch.no_grad():
                 self.__test_forward__()
-            
-            acc_curve.append(self.g_seq.eq(self.y_seq).to(torch.float).sum(-1,keepdim=True).detach())
+
+            acc_curve.append(
+                self.g_seq.eq(self.y_seq).to(torch.float).sum(-1,
+                                                              keepdim=True))
 
             if self.opt.normalize_domain:
                 x_np = to_np(self.x_seq)
@@ -228,9 +238,6 @@ class BaseModel(nn.Module):
         d_all['beta'] = beta_all
 
         acc = to_np(torch.cat(acc_curve, 1).sum(-1))
-        # if verbose:
-        #     print(acc.shape, y_all.shape, acc)
-        #     exit(0)
         acc = acc / y_all.shape[
             1]  # this is the total number of the domain. Assume that we could get them
         test_acc = acc[self.opt.tgt_domain_idx].sum() / (
@@ -247,8 +254,7 @@ class BaseModel(nn.Module):
         if (
                 self.epoch + 1
         ) % self.opt.save_interval == 0 or self.epoch + 1 == self.opt.num_epoch:
-            if self.epoch >= -1:
-                write_pickle(d_all, self.opt.outf + '/' + str(epoch) + '_pred.pkl')
+            write_pickle(d_all, self.opt.outf + '/' + str(epoch) + '_pred.pkl')
 
         return test_acc, self.nan_flag
 
@@ -285,7 +291,7 @@ class BaseModel(nn.Module):
         torch.save(self.netD.state_dict(), fpath + '/netD.pth')
         torch.save(self.netBeta.state_dict(), fpath + '/netBeta.pth')
         torch.save(self.netBeta2U.state_dict(), fpath + '/netBeta2U.pth')
-        torch.save([self.x_buffer, self.y_buffer, self.domain_buffer], fpath + '/buffer.pth')
+        torch.save([self.x_buffer, self.y_buffer, self.domain_buffer, self.last_beta, self.last_beta_log_var_seq], fpath + '/buffer.pth')
 
     def __set_input__(self, data, domain_weight_renorm=None, train=True):
         # :param
@@ -297,13 +303,6 @@ class BaseModel(nn.Module):
         #   idx_seq: Number of domain x Batch size x 1 (the order in the whole dataset)
         #   y_value_seq: Number of domain x Batch size x Predict Data dim
 
-        # TODO: select domain, deal with samples based on weight
-        '''
-        1. select k domains
-        2. assign total values
-        3. buffer fill data
-        4. 
-        '''
         x_seq, y_seq, domain_seq = [d[0][None, :, :] for d in data
                                         ], [d[1][None, :] for d in data
                                             ], [d[2][None, :] for d in data]
@@ -369,7 +368,7 @@ class BaseModel(nn.Module):
             density = np.ones_like(random_values)
             keys = random_values ** (1 / density)  # Weighted Random Sampling
         
-            selected_indices = np.argsort(-keys)[:self.opt.num_buffersamples]
+            selected_indices = np.argsort(-keys)[:self.opt.num_buffersamples]  #zianTODO: 确定是否accessible
 
             valid = int(self.domain_sel_mask[this_domain, :].sum().item())
 
@@ -395,15 +394,16 @@ class BaseModel(nn.Module):
     def __reweight_domain_index__(self):
         domain_idx = self.beta_seq.detach()
         val = self.domain_sel_mask.sum(dim=1)
-        self.reweights = torch.zeros((domain_idx.shape[0], 1))
+        self.reweights = torch.zeros((domain_idx.shape[0], 1)).to(self.x_seq.device, self.x_seq.dtype)
+        self.reweights.requires_grad = False
         for idx in range(domain_idx.shape[0]):
             dists = torch.cdist(domain_idx[idx].unsqueeze(0), domain_idx, p=2)
             # print(dists.shape, dists)
-            w = torch.exp(- dists / (2. * self.opt.kernel_sigmaSQ)) / np.sqrt(2 * torch.pi * self.opt.kernel_sigmaSQ)
+            w = torch.exp(- dists** 2 / (2. * self.opt.kernel_sigmaSQ)) / np.sqrt(2 * torch.pi * self.opt.kernel_sigmaSQ)
             # w = torch.exp(- dists ) 
             # print(w.shape, w)
             # assert False
-            self.reweights[idx] = (w * val).sum() / w.sum()
+            self.reweights[idx] = 1. /  torch.sqrt((w * val).sum() / w.sum())
         # print(reweights, 1./reweights)
         # assert False
         # print(freq_weight, self.domain_sel)
@@ -432,6 +432,7 @@ class BaseModel(nn.Module):
                 self.__reweight_domain_index__()
             else:
                 self.reweights = torch.ones((self.num_domain, 1)).to(self.device)
+                self.reweights.requires_grad = False
         
         self.beta_U_seq = self.netBeta2U(self.beta_seq)
 
@@ -534,9 +535,11 @@ class BaseModel(nn.Module):
         # print(logits.shape, label.shape, flat(self.domain_sel_mask).shape)
         # assert False
         loss = F.cross_entropy(logits, label, reduction='none', ignore_index=-1)
-        mask = (label != -1)
-        loss = (loss * mask.float()).sum() / mask.float().sum()
 
+        mask = (label != -1)
+        # print(loss.shape, self.reweights.shape, self.reweights.repeat(1, self.tmp_batch_size).shape)
+        loss = (loss * mask.float() * flat(self.reweights.repeat(1, self.tmp_batch_size))).sum() 
+        loss /= mask.float().sum()
         return loss
 
     def __optimize_DUZF__(self):
@@ -569,18 +572,28 @@ class BaseModel(nn.Module):
         loss_p_z_x_u = torch.mean(loss_p_z_x_u)
 
 
-        domain_valid = self.domain_sel_mask.sum(dim=1).bool()
-        mask_comb = (self.domain_mask == 1) & domain_valid
-        # E_q[log p(y|z)]
-        y_seq_source = self.y_seq[mask_comb]
-        f_seq_source = self.f_seq[mask_comb]
+        # domain_valid = self.domain_sel_mask.sum(dim=1).bool()
+        # mask_comb = (self.domain_mask == 1) & domain_valid
+        # # E_q[log p(y|z)]
+        # y_seq_source = self.y_seq[mask_comb]
+        # f_seq_source = self.f_seq[mask_comb]
 
-        if y_seq_source.shape[0] == 0:
-            loss_p_y_z = torch.tensor([0]).to(y_seq_source.device)
-        else:
-            loss_p_y_z = -F.nll_loss(
-                flat(f_seq_source).squeeze(), flat(y_seq_source), reduction='none')
-            loss_p_y_z = loss_p_y_z.mean()
+        source_valid = torch.zeros_like(self.y_seq) # 30,16
+        source_valid[self.domain_mask==1, :] = 1.0
+        mask_comb = source_valid.bool() & self.domain_sel_mask.bool()
+        # mask_comb = source_valid.bool()
+        y_seq_source = flat(self.y_seq)
+        f_seq_source = flat(self.f_seq)
+        y_seq_source[~flat(mask_comb)] = -1
+
+        loss_p_y_z = -F.nll_loss(f_seq_source, y_seq_source, reduction='none', ignore_index=-1) 
+        valid_mask = (y_seq_source != -1)
+        loss_p_y_z = (loss_p_y_z * valid_mask.float() * flat(self.reweights.repeat(1, self.tmp_batch_size))).sum() 
+        loss_p_y_z /= (valid_mask.float()).sum()
+
+        # y_seq_source = flat(self.y_seq)[flat(mask_comb)]
+        # f_seq_source = flat(self.f_seq)[flat(mask_comb)]
+        # loss_p_y_z = -F.nll_loss(f_seq_source, y_seq_source)
         # todo
         # y_seq_source = self.y_seq[self.domain_mask == 1]
         # f_seq_source = self.f_seq[self.domain_mask == 1]
@@ -595,7 +608,7 @@ class BaseModel(nn.Module):
         #     exit(0)
         var_beta = torch.exp(self.beta_log_var_seq) 
         # To reproduce the exact result of our experiment, use the following line to replace the loss_beta_alpha:
-        loss_beta_alpha = (var_beta**2).sum(dim=1) * domain_valid  # [30]
+        loss_beta_alpha = (var_beta**2).sum(dim=1)  # [30]
         loss_beta_alpha = loss_beta_alpha.unsqueeze(1) * self.reweights
         loss_beta_alpha = - torch.mean(loss_beta_alpha)
         # Actually the previous line is wrong because based on our formula, it should be var_beta, not var_beta**2.
@@ -635,6 +648,9 @@ class BaseModel(nn.Module):
             self.opt.lambda_reconstruct * loss_p_x_u + self.opt.lambda_beta *
             loss_p_u_beta + self.opt.lambda_beta_alpha * loss_beta_alpha +
             loss_p_y_z + loss_q_u_x + loss_q_z_x_u + loss_p_z_x_u)
+        
+        # if self.opt.imbal:
+        #     loss_E += ((self.last_beta - self.beta_seq)**2).mean()
 
         self.optimizer_D.zero_grad()
         self.loss_D.backward(retain_graph=True)
@@ -756,6 +772,7 @@ class VDI(BaseModel):
             self.netD.load_state_dict(torch.load(self.opt.pretrain_model_warmup_path + '/netD.pth'))
             self.netBeta.load_state_dict(torch.load(self.opt.pretrain_model_warmup_path + '/netBeta.pth'))
             self.netBeta2U.load_state_dict(torch.load(self.opt.pretrain_model_warmup_path + '/netBeta2U.pth'))
+            # self.x_buffer, self.y_buffer, self.domain_buffer, self.last_beta, self.last_beta_log_var_seq = torch.load(self.opt.pretrain_model_warmup_path + '/buffer.pth')
             self.x_buffer, self.y_buffer, self.domain_buffer = torch.load(self.opt.pretrain_model_warmup_path + '/buffer.pth')
 
         if self.opt.fix_u_r:
@@ -809,6 +826,7 @@ class VDI(BaseModel):
         self.lr_schedulers = [self.lr_scheduler_UZF, self.lr_scheduler_D]
 
     def __u_mean__(self, u_seq):
+        # 要改
         mu_beta = u_seq.mean(1).detach()
         mu_beta_mean = mu_beta.mean(0, keepdim=True)
         mu_beta_std = mu_beta.std(0, keepdim=True)
@@ -871,7 +889,9 @@ class VDI(BaseModel):
         # return loss
         loss = F.nll_loss(flat(d_seq), this_domain_seq, reduction='none', ignore_index=-1)
         mask = (this_domain_seq != -1)
-        loss = (loss * mask.float()).sum() / mask.float().sum()
+        # print(d_seq.shape, self.tmp_batch_size, loss.shape, mask.shape, flat(self.reweights.repeat(1, self.tmp_batch_size)).shape)
+        loss = (loss * mask.float() * flat(self.reweights.repeat(1, self.tmp_batch_size))).sum() 
+        loss /= mask.float().sum()
 
         # tmp_loss = F.nll_loss(flat(d_seq), this_domain_seq, ignore_index=-1)
 
@@ -879,10 +899,6 @@ class VDI(BaseModel):
         #     print(loss, mask.float().sum(), tmp_loss)
         # assert False
         return loss
-        
-        # print(d_seq.shape, this_domain_seq.shape)
-        # assert False
-           
 
     def __loss_D_cida__(self, d_seq):
         # this is for CIDA
@@ -893,23 +909,13 @@ class VDI(BaseModel):
     def __loss_D_grda__(self, d_seq):
         # this is for GRDA
         A = self.A
-        
+
         criterion = nn.BCEWithLogitsLoss()
-        # print(d_seq.shape, self.domain_sel_mask.shape)
-        d = d_seq * self.domain_sel_mask.unsqueeze(-1)
+        d = d_seq
         # random pick subchain and optimize the D
         # balance coefficient is calculate by pos/neg ratio
         # A is the adjancency matrix
-        if self.opt.online:
-            # ZIYANTODO: fix it
-            my_sample = min(self.tmp_num_domain-1, self.opt.sample_v)
-        else:
-            my_sample=self.opt.sample_v
-
-        sub_graph = self.__sub_graph__(my_sample_v=my_sample, A=A)
-        # print(A.shape,len(sub_graph),sub_graph)
-        # print(my_sample, sub_graph)
-        # exit(0)
+        sub_graph = self.__sub_graph__(my_sample_v=self.opt.sample_v, A=A)
 
         errorD_connected = torch.zeros((1, )).to(self.device)  # .double()
         errorD_disconnected = torch.zeros((1, )).to(self.device)  # .double()
@@ -917,12 +923,10 @@ class VDI(BaseModel):
         count_connected = 0
         count_disconnected = 0
 
-        for i in range(my_sample):
+        for i in range(self.opt.sample_v):
             v_i = sub_graph[i]
-            # print(sub_graph, i)
             # no self loop version!!
-            for j in range(i + 1, my_sample):
-                # print(sub_graph, i, j)
+            for j in range(i + 1, self.opt.sample_v):
                 v_j = sub_graph[j]
                 label = torch.full(
                     (self.tmp_batch_size, ),
@@ -942,6 +946,7 @@ class VDI(BaseModel):
                 else:
                     errorD_disconnected += criterion(output, label)
                     count_disconnected += 1
+
         # prevent nan
         if count_connected == 0:
             count_connected = 1
@@ -954,6 +959,12 @@ class VDI(BaseModel):
         return errorD * self.num_domain
 
     def __sub_graph__(self, my_sample_v, A):
+        # sub graph tool for grda loss
+        if np.random.randint(0, 2) == 0:
+            return np.random.choice(self.num_domain,
+                                    size=my_sample_v,
+                                    replace=False)
+
         # subsample a chain (or multiple chains in graph)
         left_nodes = my_sample_v
         choosen_node = []
@@ -962,6 +973,7 @@ class VDI(BaseModel):
             chain_node, node_num = self.__rand_walk__(vis, left_nodes, A)
             choosen_node.extend(chain_node)
             left_nodes -= node_num
+
         return choosen_node
 
     def __rand_walk__(self, vis, left_nodes, A):
@@ -1000,3 +1012,4 @@ class VDI(BaseModel):
             else:
                 break
         return chain_node, node_num
+

@@ -55,7 +55,7 @@ opt.save_interval = 100
 opt.test_interval = 20
 
 opt.device = "cuda"
-opt.gpu_device = "1"
+opt.gpu_device = "3"
 opt.gamma = 100
 opt.beta1 = 0.9
 opt.weight_decay = 5e-4
@@ -81,15 +81,15 @@ opt.use_pretrain_model_warmup = True
 
 opt.pretrain_model_all_path = opt.outf
 opt.pretrain_model_warmup_path = opt.outf_warm
-opt.epoch_per_T = 200
+opt.epoch_per_T = 100
 opt.upperbound = False
 
 # online settings, # of domain in each batch
 opt.online = True
 # opt.online = False
 
-opt.k = 3
+opt.k = 2
 opt.use_buffer = False
 opt.num_buffersamples = 3
 opt.imbal = False
-opt.kernel_sigmaSQ = 0.1
+opt.kernel_sigmaSQ = 1.0
